@@ -1,0 +1,35 @@
+spring:
+  application:
+    name: water-service
+    version: @project.version@
+  profiles:
+    active: home
+  webflux:
+    base-path: "/home"
+
+server:
+  port: 6200
+eureka:
+  client:
+    service-url:
+      defaultZone: http://service-discovery:6000/eureka
+    fetch-registry: true
+    register-with-eureka: true
+
+---
+
+spring:
+  config:
+    activate:
+      on-profile: local
+
+server:
+  port: 6006
+management:
+  server:
+    port: 8006
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:6000/eureka
