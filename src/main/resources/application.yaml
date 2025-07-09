@@ -16,6 +16,12 @@ eureka:
     fetch-registry: true
     register-with-eureka: true
 
+shelly:
+  sensor:
+    uni:
+      hot-water:
+        host: 10.78.30.47
+
 ---
 
 spring:
@@ -31,5 +37,4 @@ management:
 
 eureka:
   client:
-    service-url:
-      defaultZone: http://localhost:6000/eureka
+    enabled: false
