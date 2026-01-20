@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 @Slf4j
 @Component
@@ -14,7 +15,7 @@ public class HotWaterSensorCron {
     private final HotWaterService hotWaterService;
 
     @Scheduled(fixedRateString = "PT1m", initialDelayString = "PT10s")
-    void updateHotWaterTemperature() {
-        hotWaterService.handleHotWaterUpdate().subscribe();
+    Mono<Void> updateHotWaterTemperature() {
+        return hotWaterService.handleWaterUpdate();
     }
 }

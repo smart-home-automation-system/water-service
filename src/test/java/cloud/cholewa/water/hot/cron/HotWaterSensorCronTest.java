@@ -23,7 +23,7 @@ class HotWaterSensorCronTest {
 
     @Test
     void should_update_hot_water_temperature() {
-        when(hotWaterService.handleHotWaterUpdate()).thenReturn(Mono.empty());
+        when(hotWaterService.handleWaterUpdate()).thenReturn(Mono.empty());
 
         sut.updateHotWaterTemperature()
             .as(StepVerifier::create)
