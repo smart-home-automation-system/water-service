@@ -21,6 +21,7 @@ shelly:
     uni:
       hot-water:
         host: 10.78.30.47
+        port: 80
 
 ---
 
