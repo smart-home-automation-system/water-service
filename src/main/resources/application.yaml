@@ -6,6 +6,17 @@ spring:
     active: home
   webflux:
     base-path: "/home/water"
+  datasource:
+    host: ${database-host:localhost}
+    port: ${database-port:1433}
+    database: ${database-name:dummyName}
+    username: ${database-user:dummyUser}
+    password: ${database-password:dummyPassword}
+  flyway:
+    url: ${flyway-url:localhost}
+    user: ${database-user:dummyUser}
+    password: ${database-password:dummyPassword}
+    enabled: on
 
 server:
   port: 6200
@@ -38,4 +49,13 @@ management:
 
 eureka:
   client:
+    enabled: false
+
+---
+
+spring:
+  config:
+    activate:
+      on-profile: test
+  flyway:
     enabled: false
