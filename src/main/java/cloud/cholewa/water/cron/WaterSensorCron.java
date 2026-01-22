@@ -1,6 +1,6 @@
-package cloud.cholewa.water.hot.cron;
+package cloud.cholewa.water.cron;
 
-import cloud.cholewa.water.hot.service.HotWaterService;
+import cloud.cholewa.water.service.WaterService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -10,12 +10,12 @@ import reactor.core.publisher.Mono;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class HotWaterSensorCron {
+public class WaterSensorCron {
 
-    private final HotWaterService hotWaterService;
+    private final WaterService waterService;
 
-    @Scheduled(fixedRateString = "PT1m", initialDelayString = "PT10s")
+    @Scheduled(fixedRateString = "PT3m", initialDelayString = "PT10s")
     Mono<Void> updateHotWaterTemperature() {
-        return hotWaterService.handleWaterUpdate();
+        return waterService.handleWaterUpdate();
     }
 }

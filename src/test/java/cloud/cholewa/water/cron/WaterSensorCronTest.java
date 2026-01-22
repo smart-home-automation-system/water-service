@@ -1,6 +1,6 @@
-package cloud.cholewa.water.hot.cron;
+package cloud.cholewa.water.cron;
 
-import cloud.cholewa.water.hot.service.HotWaterService;
+import cloud.cholewa.water.service.WaterService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Answers;
@@ -13,17 +13,17 @@ import reactor.test.StepVerifier;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class HotWaterSensorCronTest {
+class WaterSensorCronTest {
 
     @Mock(answer = Answers.RETURNS_SMART_NULLS)
-    private HotWaterService hotWaterService;
+    private WaterService waterService;
 
     @InjectMocks
-    private HotWaterSensorCron sut;
+    private WaterSensorCron sut;
 
     @Test
     void should_update_hot_water_temperature() {
-        when(hotWaterService.handleWaterUpdate()).thenReturn(Mono.empty());
+        when(waterService.handleWaterUpdate()).thenReturn(Mono.empty());
 
         sut.updateHotWaterTemperature()
             .as(StepVerifier::create)
