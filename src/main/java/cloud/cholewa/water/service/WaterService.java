@@ -1,9 +1,9 @@
 package cloud.cholewa.water.service;
 
 import cloud.cholewa.home.model.SystemActiveReply;
-import cloud.cholewa.water.mapper.WaterMapper;
 import cloud.cholewa.water.client.WaterSensorClient;
 import cloud.cholewa.water.database.repository.WaterTemperatureRepository;
+import cloud.cholewa.water.mapper.WaterMapper;
 import cloud.cholewa.water.model.TemperatureReply;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +36,8 @@ public class WaterService {
             )
             .flatMap(temperatures -> repository.save(mapper.toEntity(temperatures)))
             .doOnNext(temperatureEntity -> updateWaterHeatingStatus(temperatureEntity.water()))
+            .doOnError(throwable -> log.error("Error handling water temperature update: {}", throwable.getMessage()))
+            .onErrorComplete()
             .then();
     }
 
