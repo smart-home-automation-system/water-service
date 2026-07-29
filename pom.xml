@@ -5,7 +5,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>4.0.1</version>
+		<version>4.1.0</version>
 		<relativePath/>
 		<!-- lookup parent from a repository -->
 	</parent>
@@ -33,36 +33,30 @@
 	</scm>
 
 	<properties>
-		<java.version>17</java.version>
+		<java.version>21</java.version>
+		<!-- default empty; jacoco:prepare-agent overrides it in the sonar workflow -->
+		<argLine/>
 		<sonar.organization>smart-home-automation-system</sonar.organization>
+		<sonar.projectKey>smart-home-automation-system_water-service</sonar.projectKey>
+		<sonar.host.url>https://sonarcloud.io</sonar.host.url>
+		<sonar.exclusions>**/model/**/*</sonar.exclusions>
 
+		<logbook.version>4.0.4</logbook.version>
 		<mapstruct.version>1.6.3</mapstruct.version>
-		<mockwebserver.version>5.3.2</mockwebserver.version>
-		<spring-cloud.version>2025.1.0</spring-cloud.version>
+		<mockwebserver.version>5.4.0</mockwebserver.version>
 
 		<!--  internal dependencies versions-->
-		<cholewa-commons.version>0.2.1</cholewa-commons.version>
-		<smart-home-sdk.version>0.1.2</smart-home-sdk.version>
-		<shelly-client.version>0.0.8</shelly-client.version>
+		<cholewa-commons.version>1.2.0</cholewa-commons.version>
+		<smart-home-sdk.version>1.1.0</smart-home-sdk.version>
+		<shelly-client.version>1.0.0</shelly-client.version>
 
 		<!--  plugins versions-->
-		<maven-enforcer-plugin.version>3.6.2</maven-enforcer-plugin.version>
-		<maven-surefire-plugin.version>3.5.2</maven-surefire-plugin.version>
+		<maven-enforcer-plugin.version>3.6.3</maven-enforcer-plugin.version>
+		<maven-surefire-plugin.version>3.5.6</maven-surefire-plugin.version>
 		<tidy-maven-plugin.version>1.4.0</tidy-maven-plugin.version>
 		<versions-maven-plugin.version>2.21.0</versions-maven-plugin.version>
 	</properties>
 
-	<dependencyManagement>
-		<dependencies>
-			<dependency>
-				<groupId>org.springframework.cloud</groupId>
-				<artifactId>spring-cloud-dependencies</artifactId>
-				<version>${spring-cloud.version}</version>
-				<type>pom</type>
-				<scope>import</scope>
-			</dependency>
-		</dependencies>
-	</dependencyManagement>
 	<dependencies>
 		<!--  internal dependencies versions-->
 		<dependency>
@@ -84,10 +78,6 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webflux</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.cloud</groupId>
-			<artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
 		</dependency>
 
 		<dependency>
@@ -116,7 +106,22 @@
 			<artifactId>r2dbc-postgresql</artifactId>
 			<scope>runtime</scope>
 		</dependency>
-
+		<!-- required by logbook's WebFluxNettyClientConfiguration; logbook declares it optional -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-http-client</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.zalando</groupId>
+			<artifactId>logbook-spring-boot-webflux-autoconfigure</artifactId>
+			<version>${logbook.version}</version>
+			<exclusions>
+				<exclusion>
+					<groupId>org.apiguardian</groupId>
+					<artifactId>apiguardian-api</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-configuration-processor</artifactId>
@@ -211,6 +216,30 @@
 							<artifactId>lombok</artifactId>
 						</exclude>
 					</excludes>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-dependency-plugin</artifactId>
+				<executions>
+					<execution>
+						<goals>
+							<goal>properties</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<version>${maven-surefire-plugin.version}</version>
+				<configuration>
+					<argLine>@{argLine} -javaagent:${org.mockito:mockito-core:jar} -Xshare:off</argLine>
+					<includes>
+						<include>**/*Test.java</include>
+						<include>**/*IT.java</include>
+					</includes>
 				</configuration>
 			</plugin>
 			<plugin>
