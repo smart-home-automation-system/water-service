@@ -6,26 +6,29 @@ spring:
     active: home
   webflux:
     base-path: "/home/water"
-  datasource:
-    host: ${database-host:localhost}
-    port: ${database-port:1433}
-    database: ${database-name:dummyName}
-    username: ${database-user:dummyUser}
-    password: ${database-password:dummyPassword}
   flyway:
-    url: ${flyway-url:localhost}
+    url: ${flyway-url:jdbc:postgresql://${database.host}:${database.port}/${database.name}}
     user: ${database-user:dummyUser}
     password: ${database-password:dummyPassword}
     enabled: on
 
+database:
+  host: ${database-host:localhost}
+  port: ${database-port:5432}
+  name: ${database-name:dummyName}
+  username: ${database-user:dummyUser}
+  password: ${database-password:dummyPassword}
+
 server:
   port: 6200
-eureka:
-  client:
-    service-url:
-      defaultZone: http://service-discovery:6000/eureka
-    fetch-registry: true
-    register-with-eureka: true
+
+logbook:
+  format:
+    style: json
+
+logging:
+  level:
+    org.zalando.logbook: trace
 
 shelly:
   sensor:
@@ -47,10 +50,9 @@ management:
   server:
     port: 8006
 
-eureka:
-  client:
-    enabled: false
-
+logbook:
+  format:
+    style: http
 ---
 
 spring:

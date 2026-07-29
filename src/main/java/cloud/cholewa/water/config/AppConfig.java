@@ -12,11 +12,6 @@ import reactor.netty.resources.ConnectionProvider;
 public class AppConfig {
 
     @Bean
-    WebClient.Builder webClientBuilder() {
-        return WebClient.builder();
-    }
-
-    @Bean
     ConnectionProvider waterConnectionProvider() {
         return ConnectionProvider.builder("waterConnectionProvider")
             .maxConnections(50)
@@ -30,7 +25,7 @@ public class AppConfig {
     }
 
     @Bean
-    WebClient webClient(final WebClient.Builder webClientBuilder, final HttpClient waterHttpClient) {
+    WebClient shellyWebClient(final WebClient.Builder webClientBuilder, final HttpClient waterHttpClient) {
         return webClientBuilder
             .clientConnector(new ReactorClientHttpConnector(waterHttpClient))
             .build();

@@ -10,6 +10,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -19,10 +21,10 @@ public class WaterService {
     private final WaterMapper mapper;
     private final WaterTemperatureRepository repository;
 
-    private boolean waterHeatingEnabled = false;
+    private final AtomicBoolean waterHeatingEnabled = new AtomicBoolean(false);
 
     public Mono<SystemActiveReply> queryWaterSystemActive() {
-        return Mono.just(SystemActiveReply.builder().active(waterHeatingEnabled).build());
+        return Mono.just(SystemActiveReply.builder().active(waterHeatingEnabled.get()).build());
     }
 
     public Mono<Void> handleWaterUpdate() {
@@ -42,12 +44,12 @@ public class WaterService {
     }
 
     private void updateWaterHeatingStatus(final double temperature) {
-        if (temperature > 42 && waterHeatingEnabled) {
-            waterHeatingEnabled = false;
+        if (temperature > 42 && waterHeatingEnabled.get()) {
+            waterHeatingEnabled.compareAndSet(true, false);
             log.info("Water heating disabled, current temperature: {}C", temperature);
         }
-        if (temperature < 38 && !waterHeatingEnabled) {
-            waterHeatingEnabled = true;
+        if (temperature < 38 && !waterHeatingEnabled.get()) {
+            waterHeatingEnabled.compareAndSet(false, true);
             log.info("Water heating enabled, current temperature: {}C", temperature);
         }
     }

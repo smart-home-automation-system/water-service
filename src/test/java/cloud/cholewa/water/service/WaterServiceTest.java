@@ -27,6 +27,7 @@ import reactor.test.StepVerifier;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
@@ -66,7 +67,7 @@ class WaterServiceTest {
 
     @Test
     void should_return_true_when_water_heating_is_enabled() {
-        ReflectionTestUtils.setField(sut, "waterHeatingEnabled", true);
+        ReflectionTestUtils.setField(sut, "waterHeatingEnabled", new AtomicBoolean(true));
 
         sut.queryWaterSystemActive()
             .as(StepVerifier::create)
@@ -88,7 +89,7 @@ class WaterServiceTest {
         final double circulationTemperature,
         final boolean expectedHeatingStatus
     ) {
-        ReflectionTestUtils.setField(sut, "waterHeatingEnabled", initialHeatingStatus);
+        ReflectionTestUtils.setField(sut, "waterHeatingEnabled", new AtomicBoolean(initialHeatingStatus));
 
         when(waterSensorClient.getTemperatures())
             .thenReturn(Mono.just(ShellyUniStatusResponse.builder()
@@ -114,14 +115,14 @@ class WaterServiceTest {
             .as(StepVerifier::create)
             .verifyComplete();
 
-        boolean enabled = (boolean) ReflectionTestUtils.getField(sut, "waterHeatingEnabled");
+        AtomicBoolean enabled = (AtomicBoolean) ReflectionTestUtils.getField(sut, "waterHeatingEnabled");
 
         verify(waterSensorClient, times(1)).getTemperatures();
         verify(mapper, times(1)).toEntity(any());
         verify(repository, times(1)).save(any());
         verifyNoMoreInteractions(waterSensorClient, mapper, repository);
 
-        assertThat(enabled).isEqualTo(expectedHeatingStatus);
+        assertThat(enabled.get()).isEqualTo(expectedHeatingStatus);
     }
 
     private static Stream<Arguments> temperatures() {
