@@ -6,7 +6,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 @SpringBootTest
 @ActiveProfiles("test")
-class WaterServiceApplicationTests {
+class WaterServiceApplicationTest {
 
     @Test
     void contextLoads() {
