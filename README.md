@@ -44,7 +44,10 @@ the shared `smart-home-sdk`, and errors are rendered through `cholewa-commons`.
 
 - Build: `mvn verify` (JDK 21).
 - Ports: local profile `6006` (management `8006`); in the deployed `home` profile the service
-  listens on `6200` like every service in the cluster.
+  listens on `6200` and Actuator on `8200` like every service in the cluster. The ingress
+  routes only 6200, so Actuator is reachable inside the cluster only — that is where the
+  Kubernetes probes hit `/actuator/health/{readiness,liveness}` and Prometheus scrapes
+  `/actuator/prometheus`.
 - Requires a reachable PostgreSQL instance. The connection properties (`database-host`,
   `database-port`, `database-name`, `database-user`, `database-password`) are bound to the
   service's own `database.*` prefix through `DatabaseProperties` and have placeholder defaults
