@@ -18,4 +18,4 @@ VOLUME /tmp
 USER nobody:nobody
 
 ENTRYPOINT ["java", "-XshowSettings:vm", "-XX:+UseZGC", "-XX:MaxRAMPercentage=75.0", "-jar", "application.jar"]
-EXPOSE 6200 9200
+EXPOSE 6200 8200
