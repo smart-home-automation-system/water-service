@@ -47,7 +47,7 @@
 		<mockwebserver.version>5.4.0</mockwebserver.version>
 
 		<!--  internal dependencies versions-->
-		<cholewa-commons.version>1.2.0</cholewa-commons.version>
+		<cholewa-commons.version>1.3.1</cholewa-commons.version>
 		<smart-home-sdk.version>1.1.0</smart-home-sdk.version>
 		<shelly-client.version>1.0.0</shelly-client.version>
 
@@ -264,6 +264,9 @@
 				<version>${maven-surefire-plugin.version}</version>
 				<configuration>
 					<argLine>@{argLine} -javaagent:${org.mockito:mockito-core:jar} -Xshare:off</argLine>
+					<systemPropertyVariables>
+						<spring.profiles.active>test</spring.profiles.active>
+					</systemPropertyVariables>
 					<includes>
 						<include>**/*Test.java</include>
 						<include>**/*IT.java</include>

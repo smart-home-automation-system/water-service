@@ -22,6 +22,8 @@ database:
   name: ${database-name:dummyName}
   username: ${database-user:dummyUser}
   password: ${database-password:dummyPassword}
+  pool:
+    max-size: 4
 
 server:
   port: 6200
@@ -92,3 +94,12 @@ spring:
       on-profile: test
   flyway:
     enabled: false
+
+logbook:
+  format:
+    style: http
+
+logging:
+  structured:
+    format:
+      console: ""
