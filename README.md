@@ -11,7 +11,7 @@
 
 ![GitHub top language](https://img.shields.io/github/languages/top/smart-home-automation-system/water-service?style=plastic)
 ![Java](https://img.shields.io/badge/java-21-yellow?style=plastic)
-![SpringBoot](https://img.shields.io/badge/SpringBoot-4.1.0-blue?style=plastic)
+![SpringBoot](https://img.shields.io/badge/SpringBoot-4.1.1-blue?style=plastic)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=smart-home-automation-system_water-service&metric=coverage)](https://sonarcloud.io/summary/new_code?id=smart-home-automation-system_water-service)
 [![Lines of Code](https://sonarcloud.io/api/project_badges/measure?project=smart-home-automation-system_water-service&metric=ncloc)](https://sonarcloud.io/summary/new_code?id=smart-home-automation-system_water-service)
 
@@ -55,7 +55,10 @@ the shared `smart-home-sdk`, and errors are rendered through `cholewa-commons`.
   defaults (`localhost:5432`) and the pool does not open connections eagerly, so the context
   starts without them and fails on the first query instead. Only `database.pool.max-size: 4`
   is pinned here, as this service's share of the 22 backend connections the managed database
-  allows; the rest of the pool settings come from the library defaults.
+  allows; the rest of the pool settings come from the library defaults. Since
+  `cholewa-commons` 1.5 those include validating every connection on acquire (`SELECT 1`,
+  2 s) and a 30-minute connection lifetime, so a connection that stopped answering is
+  replaced instead of being kept until the pod restarts.
 - Flyway derives its JDBC URL from those same properties
   (`jdbc:postgresql://<database-host>:<database-port>/<database-name>`), so a local run needs
   no extra flag. Override with `--flyway-url=...` only when migrations have to target a
@@ -79,9 +82,8 @@ Base path `/home/water` (`spring.webflux.base-path`). Both endpoints are read-on
 directly over the cluster network (`internal.service.water-service` in its configuration) and
 falls back to `false` when the call fails.
 
-The service is **not** reachable from outside the cluster. `api-gateway-service` does define
-water routes, but they target `/home/water/hot` and `/home/water/management` — paths this
-service does not expose.
+From outside the cluster both endpoints are reachable through `api-gateway-service`, which
+routes `/home/water/**` to this service over the cluster network (since its 0.2.0).
 
 Failures of the Shelly call are wrapped in `WaterException`, which `cholewa-commons`'
 `GlobalErrorExceptionHandler` renders as `400` in the shared `Errors` JSON contract. In

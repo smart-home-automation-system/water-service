@@ -23,6 +23,9 @@ database:
   username: ${database-user:dummyUser}
   password: ${database-password:dummyPassword}
   pool:
+    # this service's share of the 22 backend connections the managed database allows
+    # (heating 4 / database 6 / water 4 / presence 2, 6 free); left out, the pool silently
+    # falls back to the library default, which happens to be 4 as well
     max-size: 4
 
 server:
