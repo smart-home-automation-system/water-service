@@ -39,9 +39,17 @@ review.
   database — is logged and swallowed (`onErrorComplete`), and the flag keeps its last value.
   So a database outage freezes the flag: if it was `true`, `boiler-service` keeps heating
   until a write succeeds again. After a restart the flag starts as `false`.
-- **`database.pool.max-size` is 4**, this service's share of the 22 connections of the
-  managed database (heating 4 / database 6 / water 4 / presence 2). One poll every three
-  minutes needs far less.
+- **`database.pool.max-size` is 2**, this service's share of the 22 connections of the
+  managed database (heating 2 / database 4 / water 2 / presence 2 = 10). It was 4 up to and
+  including 0.5.0 (HAS-169): the Deployment rolls, so during a rollout the old and the new pod
+  each hold a pool and Flyway adds one JDBC connection; with this split even the three
+  rolling services at once stay at 21. One poll every three minutes needs no more, but
+  there is no headroom: scrapes saw at most 2 connections in use, which is now the whole pool.
+  The poll is `fixedRate` and its write has no timeout, so two writes that hang (2026-10-03:
+  single writes took minutes) hold both connections; every later poll then fails after
+  `max-acquire-time` and the heating flag freezes, as does `GET status/temperature`. With 4
+  that took four hung writes. A timeout on the write is the fix if it ever shows.
+  `WaterServiceApplicationTest` pins the size.
 - **The pooled `ConnectionFactory` comes from `cholewa-commons`** via the `database.*` group;
   there is no `DbConfig` here. Since `cholewa-commons` 1.5 the pool validates every
   connection on acquire (`SELECT 1`, 2 s) and caps its lifetime at 30 minutes. Before that
