@@ -53,9 +53,9 @@ the shared `smart-home-sdk`, and errors are rendered through `cholewa-commons`.
   `database.*` prefix that `cholewa-commons` consumes — the library builds the pooled
   `ConnectionFactory`, this service declares no `DbConfig` of its own. They have placeholder
   defaults (`localhost:5432`) and the pool does not open connections eagerly, so the context
-  starts without them and fails on the first query instead. Only `database.pool.max-size: 4`
+  starts without them and fails on the first query instead. Only `database.pool.max-size: 2`
   is pinned here, as this service's share of the 22 backend connections the managed database
-  allows; the rest of the pool settings come from the library defaults. Since
+  allows, sized so that a rollout — two pods, two pools — still fits; the rest of the pool settings come from the library defaults. Since
   `cholewa-commons` 1.5 those include validating every connection on acquire (`SELECT 1`,
   2 s) and a 30-minute connection lifetime, so a connection that stopped answering is
   replaced instead of being kept until the pod restarts.
