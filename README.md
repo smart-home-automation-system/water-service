@@ -42,7 +42,9 @@ the shared `smart-home-sdk`, and errors are rendered through `cholewa-commons`.
 
 # Run locally
 
-- Build: `mvn verify` (JDK 21).
+- Build: `mvn verify` (JDK 21). It needs a running **Docker**: the history query is
+  PostgreSQL's own and its test runs against a PostgreSQL container (Testcontainers) — without
+  Docker that test fails, it is not skipped.
 - Ports: local profile `6006` (management `8006`); in the deployed `home` profile the service
   listens on `6200` and Actuator on `8200` like every service in the cluster. The ingress
   routes only 6200, so Actuator is reachable inside the cluster only — that is where the
@@ -72,18 +74,53 @@ the shared `smart-home-sdk`, and errors are rendered through `cholewa-commons`.
 
 # API
 
-Base path `/home/water` (`spring.webflux.base-path`). Both endpoints are read-only.
+Base path `/home/water` (`spring.webflux.base-path`). All three endpoints are read-only.
 
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/home/water/status/active` | Whether the hot water currently needs heating — `SystemActiveReply` (`{"active": true\|false}`) from `smart-home-sdk`. Recomputed on every successful sensor poll with the 38/42 °C hysteresis described above. |
-| `GET` | `/home/water/status/temperature` | The most recent stored reading — `TemperatureReply` with `water.temperature` and `circulation.temperature` in °C. `circulation.pumpActive` is part of the model but is not populated yet, so it is always `false`. Before the first reading is stored the response is empty (`200` with no body). |
+| `GET` | `/home/water/status/temperature` | The most recent stored reading — `TemperatureReply` with `measuredAt`, `water.temperature` and `circulation.temperature` in °C. `measuredAt` is when the sensor was read — a local date-time of the house, to the second, without an offset. The service repeats its last reading for as long as the sensor is silent, so `measuredAt` is what tells a current reading from an old one. `circulation.pumpActive` is part of the model but is not populated yet, so it is always `false`. Before the first reading is stored the response is empty (`200` with no body). |
+| `GET` | `/home/water/temperature/history?from=&to=` | The stored temperatures over a range, averaged into buckets — see below. |
 
-`boiler-service` is the consumer: it polls `http://water-service:6200/home/water/status/active`
+## Temperature history
+
+`GET /home/water/temperature/history?from=2026-10-08T00:00:00&to=2026-10-09T00:00:00`
+
+```json
+{
+  "from": "2026-10-08T00:00:00",
+  "to": "2026-10-09T00:00:00",
+  "bucketSeconds": 300,
+  "points": [
+    { "at": "2026-10-08T00:00:00", "water": 46.81, "circulation": 26.44 }
+  ]
+}
+```
+
+- `from` and `to` are both required: local date-times without an offset, read by the clock
+  of the house. The range includes its start and not its end, spans at most **31 days** and
+  lies within the years 2000 to 9999. A value with `Z` or an offset, `from` not before `to`
+  or a longer range is a `400` — in the shared `Errors` JSON, without a `code`. A `to` in the
+  future is fine: there are simply no points there.
+- **The service chooses the bucket** from the length of the range and names it in
+  `bucketSeconds`: 5 min up to 2 days (at most 576 points), 30 min up to 8 days (384), 2 h up
+  to 31 days (372). A reading is stored every 3 minutes, so every bucket of a working sensor
+  has one.
+- A point is a bucket: `at` is its start, `water` and `circulation` the averages of the
+  readings in it, in °C, rounded to 2 decimals. **A bucket without a reading has no point** —
+  no nulls — so two points further apart than `bucketSeconds` are a gap in the readings. A
+  range without readings is a `200` with an empty `points`.
+- **Buckets are aligned to the clock of the house, not to `from`**: ask from a midnight or a
+  full hour, or the first point starts before the range (and there is one point more).
+- On the night the summer time begins the history has a gap of an hour no sensor caused; the
+  hour repeated when it ends is averaged into the same buckets twice.
+- Whether the circulation pump ran is not stored and is not part of the history.
+
+`boiler-service` is the consumer of `status/active`: it polls `http://water-service:6200/home/water/status/active`
 directly over the cluster network (`internal.service.water-service` in its configuration) and
 falls back to `false` when the call fails.
 
-From outside the cluster both endpoints are reachable through `api-gateway-service`, which
+The web dashboard reads `status/temperature` and the history. From outside the cluster all three endpoints are reachable through `api-gateway-service`, which
 routes `/home/water/**` to this service over the cluster network (since its 0.2.0).
 
 Failures of the Shelly call are wrapped in `WaterException`, which `cholewa-commons`'
@@ -96,7 +133,9 @@ endpoints above do not surface it.
 - **Access:** reactive, via `r2dbc-postgresql` and a Spring Data R2DBC repository.
 - **Migrations:** Flyway (JDBC driver) from `src/main/resources/db/migration`.
 - **Schema:** a single table `temperature` (`V1`) — `id` (identity), `updated_at`, `water` and
-  `circulation` as `NUMERIC(5,2)`.
+  `circulation` as `NUMERIC(5,2)` — with an index on `updated_at` (`V2`).
 - **Writes:** one row per successful poll (every `PT3m`, the first `PT10s` after startup). The
   table is append-only — there is no retention or cleanup job.
-- **Reads:** `status/temperature` returns the newest row by `updated_at`.
+- **Reads:** `status/temperature` returns the newest row by `updated_at`; the history averages
+  the rows of a range in the database (a month is some 15 000 rows, answered as 372). Both go
+  through the index on `updated_at`.
