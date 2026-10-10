@@ -15,9 +15,11 @@ review.
 
 - Is called by: `boiler-service` (`GET /home/water/status/active`, directly over the cluster
   network) and, through `api-gateway-service`, by anything outside the cluster
-  (`/home/water/**`).
+  (`/home/water/**`) — today the web dashboard, which reads `status/temperature` and, from
+  HAS-201 on, `temperature/history`.
 - Calls: the Shelly Uni sensor on the LAN over HTTP, and PostgreSQL. No RabbitMQ.
-- Owns its own database, `home-automation-water` — one append-only table, `temperature`.
+- Owns its own database, `home-automation-water` — one append-only table, `temperature`,
+  indexed on `updated_at` (`V2`).
 - Uses libraries: `cholewa-commons`, `smart-home-sdk` (`SystemActiveReply`),
   `shelly-client` (the sensor models).
 - It is the scaffold for **new** services (the `new-service` skill copies its pom,
@@ -25,7 +27,9 @@ review.
 
 ## Build & run
 
-- Build + tests: `mvn verify`
+- Build + tests: `mvn verify` — needs a running Docker since HAS-200
+  (`WaterTemperatureRepositoryTest`, Testcontainers); without one that test fails, it is not
+  skipped.
 - Local run: `home,local` Spring profiles, port `6006` (Actuator `8006`); in-cluster port
   `6200`, Actuator `8200`. Needs PostgreSQL (`database.*`, Flyway runs at startup).
 - Spring Boot **4.1.1** with logbook 4.2.0 since HAS-178; own libraries on the latest
@@ -50,6 +54,36 @@ review.
   `max-acquire-time` and the heating flag freezes, as does `GET status/temperature`. With 4
   that took four hung writes. A timeout on the write is the fix if it ever shows.
   `WaterServiceApplicationTest` pins the size.
+- **The temperature history (HAS-200) is the contract of the dashboard's charts** — the shape
+  and the rules of the room history of `heating-service` (HAS-199), with `HistoryRange` copied
+  from there; only the widths differ. What is easy to break:
+  - **The bucket widths follow the poll.** 5 min / 30 min / 2 h, each dividing a day (that is
+    what puts a bucket on the clock of the house) and none below the 3 minutes of
+    `WaterSensorCron` — a narrower one would be empty by design and the dashboard would draw a
+    gap. Change the poll interval and `HistoryRangeTest` has to be read again.
+  - **`updated_at` is wall-clock time of the house without a zone**, written by the JVM of the
+    pod. The query buckets it as it is: the hour skipped in spring has no points, the hour
+    repeated in autumn is averaged twice into the same buckets.
+  - **The SQL is PostgreSQL's own**, and `WaterTemperatureRepositoryTest` is the only test that
+    runs it (Testcontainers, the migrations applied by hand, the JVM on the zone of the house).
+    It also pins the index of `V2`.
+  - **It shares the pool of 2 with the poll and has no timeout either.** A month is one
+    statement through the index (15 000 rows, 30 ms on a local PostgreSQL); a read that hangs
+    holds a connection like a hung write does, and two of them freeze the heating flag
+    `boiler-service` reads. One range at a time from a client; the timeout, if it ever shows,
+    belongs on both.
+  - **The refusals of a range carry no `code`** — a `ResponseStatusException`, answered as a
+    400 with the reason as the message.
+- **`measuredAt` of `status/temperature` is the `updated_at` of the row, cut to the second**
+  (the column keeps microseconds). It must stay the time of the row: the service repeats its
+  last row while the sensor is silent, and the dashboard judges the age of the reading by it.
+- **A migration is rehearsed on a throwaway PostgreSQL, never by a local run** — `home,local`
+  with the real `database-*` values is the production database, and a local instance also
+  polls the sensor and stores rows. The recipe of `V2`: `postgres:16` in Docker with
+  `-c ssl=on` and the snakeoil certificate of the image (`cholewa-commons` connects with
+  `sslMode` `REQUIRE`; in Git Bash with `MSYS_NO_PATHCONV=1`, or the certificate paths are
+  rewritten), the image of the current release against it, then the new jar with the five
+  `--database-*` arguments while the old one keeps running.
 - **The pooled `ConnectionFactory` comes from `cholewa-commons`** via the `database.*` group;
   there is no `DbConfig` here. Since `cholewa-commons` 1.5 the pool validates every
   connection on acquire (`SELECT 1`, 2 s) and caps its lifetime at 30 minutes. Before that
