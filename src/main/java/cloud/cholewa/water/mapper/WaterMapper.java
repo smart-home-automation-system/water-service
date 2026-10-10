@@ -15,8 +15,8 @@ public interface WaterMapper {
     @Mapping(target = "circulation", expression = "java(response.getExtTemperature().get(\"1\").gettC())")
     WaterTemperatureEntity toEntity(ShellyUniStatusResponse response);
 
-    //the row keeps the microseconds of the clock; the answer is to the second, like every other
-    //date-time of the API
+    //the row keeps the microseconds of the clock; the answer is to the second, as the contract of
+    //the dashboard has it (HAS-200)
     @Mapping(
         target = "measuredAt",
         expression = "java(entity.updatedAt().truncatedTo(java.time.temporal.ChronoUnit.SECONDS))"
