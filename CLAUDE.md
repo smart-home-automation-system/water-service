@@ -32,8 +32,10 @@ review.
   skipped.
 - Local run: `home,local` Spring profiles, port `6006` (Actuator `8006`); in-cluster port
   `6200`, Actuator `8200`. Needs PostgreSQL (`database.*`, Flyway runs at startup).
-- Spring Boot **4.1.1** with logbook 4.2.0 since HAS-178; own libraries on the latest
-  releases, as the org rule asks of every service task.
+- Spring Boot **4.1.2** (HAS-307) with logbook 4.2.0; `cholewa-commons` 1.11.0, `smart-home-sdk` 1.12.0,
+  `shelly-client` 2.1.0 (its own clients and MQTT decoder switched off - `shelly.client.enabled: false`,
+  pinned by `WaterServiceApplicationTest`); own libraries on the latest releases, as the org rule asks of
+  every service task.
 
 ## Specifics
 
@@ -90,8 +92,24 @@ review.
   nothing checked a connection before use; during the connectivity trouble of 2026-10-03
   single writes took 200–370 s.
 - **The poll is `fixedRate`, not `fixedDelay`**: for a method returning a `Mono` Spring does
-  not wait for the previous run, so polls can overlap when one takes longer than three
-  minutes. `presence-service` switched to `fixedDelay` for that reason; here it is unchanged.
+  not wait for the previous run, so polls could overlap when one took longer than three
+  minutes. **Since HAS-307 a poll is bounded** (`ScheduledPass.bounded` of `cholewa-commons` 1.11.0,
+  `WaterSensorCron.LIMIT` 2 min, below the rate): the client of the Shelly has a connect timeout but
+  none for the answer, so a sensor that took the connection and never answered held a poll for good,
+  and a write that hangs did the same - now the poll ends at its bound with a WARN and they no longer
+  pile up. A cancelled write may still run on the server (the cancel only stops the waiting).
+  `WaterSensorCronTest` hangs a poll. The scheduler has the pool of 10 of the library (one task today).
+  **The Shelly client has a `responseTimeout` of 5 s** since then too (`AppConfig.SHELLY_RESPONSE_TIMEOUT`,
+  the value of boiler-service - netty's, between reads): a sensor that answers nothing fails the poll
+  after 5 s, logged like any device error, and the bound is left for what no timeout covers.
+  `AppConfigTest` pins it against a socket that never answers.
+- **Scheduling is off under `test`** (HAS-307, `SchedulingConfig`, `@Profile("!test")` - it was on the
+  application class, and every context test read the Shelly Uni of the house ten seconds after its start);
+  the `test` document points the sensor at `localhost:1` as the second line of defence, both pinned by
+  `WaterServiceApplicationTest`.
+- **The calls to the Shelly are logged** since HAS-307: `cholewa-commons` >= 1.10.0 puts Logbook in the
+  reactive chain of every `WebClient` of the injected builder, with full bodies (the answer of the Uni is
+  small) and the `traceId`; there was no Logbook handler on that client before.
 - **Surefire activates the `test` profile for every class** (`spring.profiles.active` in the
   pom), so a test without `@ActiveProfiles` does not switch the log output to JSON for the
   classes that follow. The `includes` match only `**/*Test.java` and `**/*IT.java` — a class
