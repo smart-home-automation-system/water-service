@@ -64,6 +64,9 @@ logging:
     org.zalando.logbook: trace
 
 shelly:
+  # shelly-client >= 2.0.0 brings its own clients and MQTT decoder; this service keeps WaterSensorClient
+  client:
+    enabled: false
   sensor:
     uni:
       hot-water:
@@ -99,6 +102,15 @@ spring:
       on-profile: test
   flyway:
     enabled: false
+
+# second line of defence: SchedulingConfig schedules nothing under this profile, and should anything in a
+# test call the Shelly all the same, it must not reach the device of the house
+shelly:
+  sensor:
+    uni:
+      hot-water:
+        host: localhost
+        port: 1
 
 logbook:
   format:

@@ -8,8 +8,15 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.netty.http.client.HttpClient;
 import reactor.netty.resources.ConnectionProvider;
 
+import java.time.Duration;
+
 @Configuration
 public class AppConfig {
+
+    //the longest silence while the answer of the Shelly Uni is read (HAS-307, the value of boiler-service): a
+    //sensor that takes the connection and never answers fails the poll after it, instead of holding the pass
+    //until its bound. netty's timeout - between reads, not for the whole call
+    static final Duration SHELLY_RESPONSE_TIMEOUT = Duration.ofSeconds(5);
 
     @Bean
     ConnectionProvider waterConnectionProvider() {
@@ -21,7 +28,8 @@ public class AppConfig {
     @Bean
     HttpClient waterHttpClient(final ConnectionProvider waterConnectionProvider) {
         return HttpClient.create(waterConnectionProvider)
-            .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10000);
+            .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10000)
+            .responseTimeout(SHELLY_RESPONSE_TIMEOUT);
     }
 
     @Bean
