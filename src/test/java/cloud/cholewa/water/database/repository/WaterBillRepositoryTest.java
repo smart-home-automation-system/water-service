@@ -29,7 +29,7 @@ import java.util.TimeZone;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-//The SQL of the bills and of the imported consumption (HAS-318, V4) and the alarms (HAS-319, V5) - PostgreSQL's own, against a PostgreSQL in Docker on
+//The SQL of the bills and of the imported consumption (HAS-318, V4) and the alarms (HAS-319, V5, V6) - PostgreSQL's own, against a PostgreSQL in Docker on
 //the tables of the migrations, the setup of WaterMeterRepositoryTest. Without a Docker the test fails
 @DataR2dbcTest
 @Testcontainers
@@ -219,6 +219,17 @@ class WaterBillRepositoryTest {
             .verifyComplete();
     }
 
+
+    //the kinds of the flow alarms (HAS-320, V6) are taken, a kind no version knows is refused
+    @Test
+    void should_take_the_kinds_of_the_flow_alarms() {
+        for (final String kind : new String[] {"high flow", "continuous flow", "empty house flow"}) {
+            alerts.save(new WaterAlertEntity(null, kind, AT, null, null)).as(StepVerifier::create)
+                .expectNextCount(1).verifyComplete();
+        }
+        alerts.save(new WaterAlertEntity(null, "leak", AT, null, null)).as(StepVerifier::create)
+            .expectError().verify();
+    }
     private void reading(final String total, final LocalDateTime measuredAt, final LocalDateTime lastCheckedAt) {
         databaseClient.sql("INSERT INTO water_meter_reading (total_m3, measured_at, last_checked_at) VALUES (:total, :at, :checked)")
             .bind("total", new BigDecimal(total))

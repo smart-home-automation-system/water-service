@@ -58,6 +58,25 @@ info on the return naming how long it lasted; a value not known (not fresh) neve
 The open alarms are stored (`water_alert`, `V5`), so a restart neither repeats an alert nor forgets
 a return; an alert that never got through (the broker down with the valve) is said by the return.
 
+The flow of the water raises three more (HAS-320), judged from every report of the flow rate as
+it arrives (MQTT at every change, the RPC read of every minute) - so a pause shorter than a minute
+is seen - and in the same minute pass:
+
+| Alarm | When | Return |
+|---|---|---|
+| High water flow | above `water.flow.high-above` (25 l/min) for `high-after` (3 min) | the flow at or below it for longer than `continuous-pause` |
+| Continuous water flow | above zero for `continuous-after` (30 min), a pause no longer than `continuous-pause` (1 min) being the same flow | a pause longer than that |
+| Water while nobody is at home | above `empty-house-above` (0.5 l/min, the noise of the sensor) while the house is empty for `empty-house-after` (2 min) | the flow stops |
+
+Each is judged by its own run, so a high flow that is also continuous raises the high flow at its
+bound and the continuous one at its own. Whether the house is empty is read every minute from
+`presence-service` (`GET /home/presence/residents/presence` over k8s DNS, the rule of
+`light-service`): unknown - presence-service not read, a member not seen for a while - is never
+empty. While the rate is not fresh (published on a change only, the RPC read failing) the litres of
+the last whole minute of the counter (`by_minute`) are the flow; while neither is known nothing
+opens or closes - the offline alarm speaks for the valve. The reminders and the stored episodes are
+those of the alarms above (`water_alert`, kinds added by `V6`).
+
 Everything is non-blocking (Spring WebFlux / Reactor): the sensor is read with `WebClient`
 using the models from the shared `shelly-client` (the valve with its RPC client and its MQTT
 decoder), PostgreSQL is accessed over **R2DBC**
@@ -99,7 +118,9 @@ the shared `smart-home-sdk`, and errors are rendered through `cholewa-commons`.
   user `notification`; `notification-rabbitmq-password` has no default either. The `local`
   profile publishes with `env: dev`, so a local run never reaches the channel of the house.
 - The device registry: `internal.service.database` (`http://localhost:6005` in `local` - a
-  port-forward to `database-service`).
+  port-forward to `database-service`); whether anybody is at home: `internal.service.presence`
+  (`http://localhost:6009` in `local`, a port-forward to `presence-service` - not reached, the house
+  is not known and no alarm of the empty house is raised).
 - The sensor address comes from `shelly.sensor.uni.hot-water.host` / `.port`. When the sensor
   is unreachable the scheduled poll logs the error and skips the cycle — the service keeps
   running, it simply stores no new reading, so `status/temperature` keeps returning the last
@@ -297,7 +318,7 @@ endpoints above do not surface it.
   `meter_reading_m3`, `amount`, `note`, `created_at`, `updated_at`) and `water_consumption_import`
   (`day`, `volume_m3` - the history of the Shelly cloud, kept apart from `water_meter_reading`,
   whose latest row and deltas go by `id`); the alarms (`V5`): `water_alert` (`kind`, `opened_at`,
-  `last_told_at`, `closed_at`; at most one open a kind).
+  `last_told_at`, `closed_at`; at most one open a kind), its kinds of the flow alarms added by `V6`.
 - **The valve:** a snapshot every minute of what is fresh - a row of `water_meter_reading` only when
   the counter changed (otherwise `last_checked_at` of the latest row moves), the one row of
   `water_valve_status` updated (its `measured_at` only with a change of a value). The readings older

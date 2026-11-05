@@ -62,6 +62,8 @@ internal:
   service:
     # the device registry: the water valve of the house (HAS-311, HAS-316)
     database: http://database-service:6200
+    # whether anybody is at home, for the flow of the empty house (HAS-320)
+    presence: http://presence-service:6200
 
 water:
   # the water valve (HAS-316): a value not reported for stale-after - by MQTT or by the read of every minute - is left out
@@ -81,6 +83,16 @@ water:
     frost-below: 3
     frost-after: PT5M
     reminder-every: PT1H
+  # the flow alarms (HAS-320, the defaults of the owner 2026-10-23): flows in l/min, a bare duration is minutes. A high
+  # flow above high-above for high-after; a continuous flow above zero for continuous-after, a pause no longer than
+  # continuous-pause the same flow; any flow above empty-house-above while the house is empty for empty-house-after
+  flow:
+    high-above: 25
+    high-after: PT3M
+    continuous-pause: PT1M
+    continuous-after: PT30M
+    empty-house-above: 0.5
+    empty-house-after: PT2M
 
 # the notifications of the alarms (HAS-319): the exchange is on the same broker as spring.rabbitmq.*, on its own virtual
 # host - a second connection (NotificationRabbitConfig); env is one of the two headers it routes by.
@@ -159,6 +171,7 @@ rabbitmq:
 internal:
   service:
     database: http://localhost:6005
+    presence: http://localhost:6009
 
 # a local run never posts to the channel of the house: dev is routed to the dev queues
 notification:
@@ -200,6 +213,7 @@ rabbitmq:
 internal:
   service:
     database: http://localhost:1
+    presence: http://localhost:1
 
 notification:
   password: test

@@ -2,8 +2,11 @@ package cloud.cholewa.water.alarm;
 
 import cloud.cholewa.commons.notification.NotificationPublisher;
 import cloud.cholewa.shelly.model.NumberStatus;
+import cloud.cholewa.shelly.model.ObjectStatus;
 import cloud.cholewa.water.database.model.WaterAlertEntity;
 import cloud.cholewa.water.database.repository.WaterAlertRepository;
+import cloud.cholewa.water.presence.PresenceClient;
+import cloud.cholewa.water.presence.ResidentPresence;
 import cloud.cholewa.water.registry.ValveRegistry;
 import cloud.cholewa.water.registry.WaterValve;
 import cloud.cholewa.water.valve.ValveProperties;
@@ -19,6 +22,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -32,7 +37,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-//The monitor of the alarms (HAS-319): the open episodes read before anything is decided, a failing publish swallowed and
+//The monitor of the alarms (HAS-319, HAS-320): the open episodes read before anything is decided, a failing publish swallowed and
 //tried again, the rows stored, every pass bounded
 class AlarmMonitorTest {
 
@@ -42,6 +47,9 @@ class AlarmMonitorTest {
     private static final LocalDateTime T0 = LocalDateTime.of(2026, 11, 5, 10, 0);
     private static final AlarmProperties PROPERTIES = new AlarmProperties(100.0, Duration.ofMinutes(5),
         Duration.ofMinutes(5), 3.0, Duration.ofMinutes(5), Duration.ofHours(1));
+    private static final FlowProperties FLOW = new FlowProperties(25.0, Duration.ofMinutes(3), Duration.ofMinutes(1),
+        Duration.ofMinutes(30), 0.5, Duration.ofMinutes(2));
+    private static final ValveProperties VALVE = new ValveProperties(Duration.ofMinutes(5));
 
     private final AtomicReference<Instant> now = new AtomicReference<>(START);
     private final Clock clock = new Clock() {
@@ -61,7 +69,9 @@ class AlarmMonitorTest {
         }
     };
     private final ValveRegistry registry = mock(ValveRegistry.class);
-    private final ValveTracker tracker = new ValveTracker(clock);
+    private final FlowTrack flowTrack = new FlowTrack(FLOW, VALVE);
+    private final ValveTracker tracker = new ValveTracker(clock, flowTrack);
+    private final PresenceClient presenceClient = mock(PresenceClient.class);
     private final WaterAlertRepository repository = mock(WaterAlertRepository.class);
     private final NotificationPublisher publisher = mock(NotificationPublisher.class);
     private AlarmMonitor sut;
@@ -74,8 +84,61 @@ class AlarmMonitorTest {
         when(publisher.publishAlert(anyString())).thenReturn(Mono.empty());
         when(publisher.publishReminder(anyString())).thenReturn(Mono.empty());
         when(publisher.publishInfo(anyString())).thenReturn(Mono.empty());
-        sut = new AlarmMonitor(registry, tracker, repository, publisher, PROPERTIES,
-            new ValveProperties(Duration.ofMinutes(5)), clock);
+        when(presenceClient.residents()).thenAnswer(call -> Mono.just(List.of(
+            new ResidentPresence("Alex", true, T0.minusDays(1), LocalDateTime.now(clock)))));
+        sut = new AlarmMonitor(registry, tracker, flowTrack, presenceClient, repository, publisher, PROPERTIES, FLOW,
+            VALVE, clock);
+    }
+
+    //water running in a house empty for two minutes: the alert, with the flow the valve reports
+    @Test
+    void should_alert_a_flow_while_the_house_is_empty() {
+        when(presenceClient.residents()).thenAnswer(call -> Mono.just(List.of(
+            new ResidentPresence("Alex", false, T0.minusHours(1), LocalDateTime.now(clock)))));
+
+        passesWithFlow(0.004, 0, 2);
+
+        verify(publisher).publishAlert("Water running while nobody is at home: 4 l/min since 10:00 (2 min), "
+            + "the house empty since 10:00.");
+        assertThat(sut.current().open()).containsKey(Alarm.EMPTY_HOUSE_FLOW);
+    }
+
+    //presence-service that cannot be read is not known - never empty: no alarm of the empty house
+    @Test
+    void should_raise_no_alarm_of_the_empty_house_while_presence_service_is_not_read() {
+        when(presenceClient.residents()).thenReturn(Mono.error(new IllegalStateException("presence-service answered 503")));
+
+        passesWithFlow(0.004, 0, 10);
+
+        verify(publisher, never()).publishAlert(anyString());
+        assertThat(sut.house()).isEqualTo(House.UNKNOWN);
+    }
+
+    //a presence-service that never answers is cut off and read as not known; the pass goes on
+    @Test
+    void should_cut_off_a_presence_service_that_never_answers() {
+        when(presenceClient.residents()).thenReturn(Mono.never());
+
+        StepVerifier.withVirtualTime(sut::check)
+            .expectSubscription()
+            .thenAwait(AlarmMonitor.PRESENCE_TIMEOUT)
+            .verifyComplete();
+        assertThat(sut.house()).isEqualTo(House.UNKNOWN);
+    }
+
+    //the rate not fresh - published on a change only - and the counter fresh: the litres of its last minute are the
+    //flow, and a flow above zero for half an hour is continuous
+    @Test
+    void should_take_the_last_minute_of_the_counter_while_the_rate_is_not_fresh() {
+        for (int minute = 0; minute <= 30; minute++) {
+            at(minute);
+            tracker.report(200, ObjectStatus.builder()
+                .value(Map.of("counter", Map.of("total", 62.0 + minute, "by_minute", List.of(2.5, 2.5, 2.5)))).build());
+            sut.check().as(StepVerifier::create).verifyComplete();
+        }
+
+        verify(publisher).publishAlert(
+            "Continuous water flow: running without a pause since 10:00 (30 min), 2.5 l/min now.");
     }
 
     //no mains water for five minutes: one alert, stored as told
@@ -184,6 +247,15 @@ class AlarmMonitorTest {
         for (int minute = first; minute <= last; minute++) {
             at(minute);
             tracker.report(201, NumberStatus.builder().value(kilopascals).build());
+            sut.check().as(StepVerifier::create).verifyComplete();
+        }
+    }
+
+    //a pass a minute, the valve reporting its flow rate (m3/min) before each
+    private void passesWithFlow(final double cubicMetres, final int first, final int last) {
+        for (int minute = first; minute <= last; minute++) {
+            at(minute);
+            tracker.report(200, NumberStatus.builder().value(cubicMetres).build());
             sut.check().as(StepVerifier::create).verifyComplete();
         }
     }

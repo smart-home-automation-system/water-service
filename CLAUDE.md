@@ -6,14 +6,15 @@ does the water need heating? `boiler-service` polls that flag to drive the pumps
 furnace. Since HAS-316 it is also the water meter of the house: the Neo Smart Water Valve in the
 garage, from the broker and its RPC, served on `GET /home/water/valve` (epic HAS-310), and since HAS-317
 the consumption by day, week, month and year on `GET /home/water/consumption`; since HAS-318 the bills of
-the waterworks compared with what the house measured, and the daily history imported from the Shelly cloud.
+the waterworks compared with what the house measured, and the daily history imported from the Shelly cloud; since HAS-319
+the alarms of the mains, the valve and frost, and since HAS-320 those of the flow - high, continuous, in an empty house.
 
 Part of the smart-home-automation-system organization — org-wide conventions, the
 repository map and working rules come from the workspace-level context
 (`organization-repository/claude/organization.md`). The user writes the code in this
 repository themselves; Claude's default role here is analysis, code review and security
 review - the owner had Claude implement the readings of the water valve (HAS-316), the consumption
-(HAS-317) and the bills (HAS-318) and reviews them in IntelliJ.
+(HAS-317), the bills (HAS-318) and the alarms (HAS-319, HAS-320) and reviews them in IntelliJ.
 
 ## Role in the system
 
@@ -23,7 +24,8 @@ review - the owner had Claude implement the readings of the water valve (HAS-316
   HAS-201 on, `temperature/history`.
 - Calls: the Shelly Uni sensor on the LAN over HTTP, the water valve over its RPC
   (`Shelly.GetComponents`, HAS-316), `database-service` for the valve of the device registry
-  (`GET /home/device/registry?kind=water valve&enabled=true`), and PostgreSQL.
+  (`GET /home/device/registry?kind=water valve&enabled=true`), `presence-service` for whether anybody is
+  at home (`GET /home/presence/residents/presence` over k8s DNS, every minute - HAS-320), and PostgreSQL.
 - Consumes: `device.prod.water` on `/device` (user `device`, `rabbitmq-password`) - every device
   event, of which only the valve is read (HAS-316).
 - Publishes: the alarms of the valve to the `notification` exchange of `/notification` (user `notification`,
@@ -97,8 +99,13 @@ review - the owner had Claude implement the readings of the water valve (HAS-316
   polls the sensor and stores rows. The recipe of `V2`: `postgres:16` in Docker with
   `-c ssl=on` and the snakeoil certificate of the image (`cholewa-commons` connects with
   `sslMode` `REQUIRE`; in Git Bash with `MSYS_NO_PATHCONV=1`, or the certificate paths are
-  rewritten), the image of the current release against it, then the new jar with the five
-  `--database-*` arguments while the old one keeps running.
+  rewritten), the image of the current release against it, then the new jar while the old one keeps
+  running. **The environment of the shell wins over a `--database-*` argument** (HAS-319: an IntelliJ env
+  file with `database-*` / `flyway-url` sent a rehearsal jar to production and applied V5 there early): pass
+  the throwaway database by the bound names and Flyway's own, e.g. `--database.host=localhost
+  --database.port=15432 --database.name=water --database.username=water --database.password=w
+  --spring.flyway.url=jdbc:postgresql://localhost:15432/water --spring.flyway.user=water
+  --spring.flyway.password=w`, and check the first log lines name the throwaway host.
 - **The pooled `ConnectionFactory` comes from `cholewa-commons`** via the `database.*` group;
   there is no `DbConfig` here. Since `cholewa-commons` 1.5 the pool validates every
   connection on acquire (`SELECT 1`, 2 s) and caps its lifetime at 30 minutes. Before that
@@ -223,6 +230,31 @@ review - the owner had Claude implement the readings of the water valve (HAS-316
       `newestReport`; the start of the pod counts as heard. The device and the broker go down together, so an alert
       that never got through is said by the return ("the alert did not get through").
     - Pressures in kPa (the unit of the valve) in the properties and the rules, bar in the words only.
+  - **The flow alarms** (HAS-320, `FlowTrack`, `FlowRun`, `FlowRules`, `FlowMessages`, `House`, package `presence`,
+    V6 - the kinds of `water_alert`) - what is easy to break:
+    - **Judged from every report of the rate, not the minute pass alone**: `ValveTracker` hands each `number:200` to its
+      `FlowListener` (`FlowTrack`, l/min) as it arrives, so a stop of 50 s is the same flow and a flush between two
+      passes is still seen. One run per alarm, each by its own bound (high above `water.flow.high-above`, continuous
+      above 0, the empty house above `empty-house-above`); a fall no longer than `continuous-pause` is the same run, a
+      longer one ends it and the next starts a run that knows where the one before ended (`previousEnd`).
+    - **The rate is published on a change only** (checked on the valve 2026-11-05: `last_update_ts` 20 min old with no
+      water), so it is fresh for `stale-after` thanks to the RPC read of every minute; while it is not, the pass hands
+      the litres of the last whole minute of the counter (`by_minute[0]`, `ValveState.lastMinute`) to the track. Neither
+      fresh: the flow is not known - nothing opens or closes, reminders go on.
+    - **A silence and the last will stop every run at the last report** (`FlowTrack.stopped`): a flow before and after a
+      gap is never one flow, and an open episode closes where the valve was last heard. Reports further apart than
+      `stale-after` plus the minute of the pass count as a gap.
+    - The high and the continuous flow open only while the water still runs (`run.above()`); the empty house also in the
+      pause after a fall - a short flush. Each opens at the start of its run and closes where it fell; an episode read
+      after a restart goes on with the first run the track sees (its `previousEnd` is null).
+    - **The empty house** from presence-service every minute (`PresenceClient` - the third copy, after light-service and
+      appliance-service - and `HouseOccupancy.judge`, the rule of light-service; `House` keeps `emptySince` through an
+      unknown spell). Unknown is never empty: presence-service not read (cut off after 10 s), a member not seen for 5 min.
+      The episode ends with the flow, not with the return of a member.
+    - **The flow is decided after the alarms of the valve and apart from them**: a defect in it is logged and decides
+      nothing that pass, it never takes the mains, the silence and frost with it (an unboxing NPE did, before the review).
+    - Flows in l/min in the properties, the track and the words (`ValveTracker.litres`); a pass has six notices at most,
+      each cut off after 10 s - should they all hang, the pass ends at its bound and the rest is due with the next.
   - **No command to the valve yet** (`Boolean.Set` of shelly-client is there for the alarms of the epic);
     `lastCommandConfirmed` of the task comes with the first command.
   - **Rehearsed** (2026-11-04): the released 0.6.1 image applied V1-V2 on a throwaway PostgreSQL with SSL (a user
