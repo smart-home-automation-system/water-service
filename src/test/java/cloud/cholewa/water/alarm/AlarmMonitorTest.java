@@ -85,7 +85,7 @@ class AlarmMonitorTest {
 
         verify(publisher).publishAlert(
             "No mains water: the pressure at the water valve is 0.4 bar since 10:00 (5 min), below 1 bar.");
-        assertThat(sut.current().open().get(Alarm.NO_MAINS)).isEqualTo(new WaterAlertEntity(5L, "no mains", T0,
+        assertThat(sut.current().open()).containsEntry(Alarm.NO_MAINS, new WaterAlertEntity(5L, "no mains", T0,
             T0.plusMinutes(5), null));
         assertThat(sut.current().unsaved()).isEmpty();
     }

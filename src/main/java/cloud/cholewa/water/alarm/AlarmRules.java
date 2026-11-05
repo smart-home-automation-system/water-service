@@ -44,10 +44,8 @@ final class AlarmRules {
         final List<Notice> notices = new ArrayList<>();
         AlarmWatch next = held.heard(readings.heardAt());
         next = offline(next, now, properties, notices);
-        next = threshold(next, Alarm.NO_MAINS, readings.pressure(), properties.pressureLowBelow(),
-            properties.pressureLowAfter(), now, properties, notices);
-        next = threshold(next, Alarm.FROST, readings.temperature(), properties.frostBelow(), properties.frostAfter(), now,
-            properties, notices);
+        next = threshold(next, Alarm.NO_MAINS, readings.pressure(), now, properties, notices);
+        next = threshold(next, Alarm.FROST, readings.temperature(), now, properties, notices);
         return new Decision(next, List.copyOf(notices));
     }
 
@@ -71,9 +69,12 @@ final class AlarmRules {
         return held;
     }
 
-    private static AlarmWatch threshold(final AlarmWatch held, final Alarm alarm, final Double value, final double bound,
-                                        final Duration after, final LocalDateTime now, final AlarmProperties properties,
+    //the pressure for NO_MAINS, the water temperature for FROST
+    private static AlarmWatch threshold(final AlarmWatch held, final Alarm alarm, final Double value,
+                                        final LocalDateTime now, final AlarmProperties properties,
                                         final List<Notice> notices) {
+        final double bound = alarm == Alarm.FROST ? properties.frostBelow() : properties.pressureLowBelow();
+        final Duration after = alarm == Alarm.FROST ? properties.frostAfter() : properties.pressureLowAfter();
         if (value == null) {
             return held.uncounted(alarm);
         }
