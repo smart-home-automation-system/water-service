@@ -1,5 +1,6 @@
 package cloud.cholewa.water;
 
+import cloud.cholewa.commons.notification.NotificationPublisher;
 import cloud.cholewa.commons.database.DatabaseProperties;
 import cloud.cholewa.shelly.http.ShellyGen1Client;
 import cloud.cholewa.shelly.codec.ShellyMqttDecoder;
@@ -70,5 +71,19 @@ class WaterServiceApplicationTest {
         assertThat(environment.getProperty("spring.rabbitmq.listener.simple.observation-enabled", Boolean.class)).isTrue();
         assertThat(environment.getProperty("spring.rabbitmq.template.observation-enabled", Boolean.class)).isTrue();
         assertThat(environment.getProperty("cholewa.required-properties[0].variable")).isEqualTo("rabbitmq-password");
+    }
+
+    //the alarms (HAS-319) go over a second connection, to /notification - one publisher, and no ConnectionFactory bean
+    //that would make RabbitAutoConfiguration back off from the listener of the device events
+    @Test
+    void should_publish_the_alarms_over_a_connection_of_their_own() {
+        final Environment environment = applicationContext.getEnvironment();
+        assertThat(applicationContext.getBeanNamesForType(NotificationPublisher.class)).hasSize(1);
+        assertThat(applicationContext.getBeanNamesForType(org.springframework.amqp.rabbit.connection.ConnectionFactory.class))
+            .hasSize(1);
+        assertThat(environment.getProperty("notification.virtual-host")).isEqualTo("/notification");
+        assertThat(environment.getProperty("notification.username")).isEqualTo("notification");
+        assertThat(environment.getProperty("cholewa.required-properties[1].variable"))
+            .isEqualTo("notification-rabbitmq-password");
     }
 }

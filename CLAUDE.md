@@ -26,6 +26,8 @@ review - the owner had Claude implement the readings of the water valve (HAS-316
   (`GET /home/device/registry?kind=water valve&enabled=true`), and PostgreSQL.
 - Consumes: `device.prod.water` on `/device` (user `device`, `rabbitmq-password`) - every device
   event, of which only the valve is read (HAS-316).
+- Publishes: the alarms of the valve to the `notification` exchange of `/notification` (user `notification`,
+  `notification-rabbitmq-password`), categories `alert` and `info` (HAS-319).
 - Owns its own database, `home-automation-water` — the append-only `temperature`, indexed on
   `updated_at` (`V2`), and the tables of the valve (`V3`).
 - Uses libraries: `cholewa-commons`, `smart-home-sdk` (`SystemActiveReply`, `SmartDevice`),
@@ -203,6 +205,24 @@ review - the owner had Claude implement the readings of the water valve (HAS-316
       WebFlux without a code. Overlap is a shared day, both ends included (`WaterBillRepository.findOverlapping`).
     - The import of a whole set is one transaction (`@Transactional` on `ConsumptionImportRepository.replaceAll`, a
       delete and one multi-row insert).
+  - **The alarms** (HAS-319, package `alarm`, V5) - what is easy to break:
+    - **A second connection to the broker**, `/notification` as the user `notification`
+      (`notification-rabbitmq-password`, required): `NotificationRabbitConfig` is the **seventh copy** (heating, blinds,
+      weather, light, amx, energy, water - kept by the owner's choice, HAS-319 left it to the owner). It must never be a
+      `ConnectionFactory` bean - `RabbitAutoConfiguration` would back off from the listener of the device events;
+      `WaterServiceApplicationTest` pins one connection factory and one publisher. `local` publishes with `env: dev`.
+    - **Decided by `AlarmRules` without I/O** (pinned by `AlarmRulesTest`), held in memory by `AlarmMonitor` (every
+      minute, bounded at 50 s): the decision at once, then the notices (each cut off after 10 s, a failure logged and
+      tried again with the next pass - never applied before it was published), then the rows of `water_alert`.
+      Nothing is decided before the open episodes are read, nothing while no valve is registered.
+    - No mains / frost: below the bound in **every** pass for its time opens at the first of them; at or above it in
+      every pass for the **same time** returns, closed at the first of them - a time hysteresis, or a temperature
+      wavering about 3 °C would alert and return every few minutes. A value not fresh (`water.valve.stale-after`) is
+      never low: it breaks both counts and closes nothing - so a valve that left raises only the offline alarm.
+    - Offline: `lastHeard` is kept by the monitor, not the tracker - the last will forgets the values, and with them
+      `newestReport`; the start of the pod counts as heard. The device and the broker go down together, so an alert
+      that never got through is said by the return ("the alert did not get through").
+    - Pressures in kPa (the unit of the valve) in the properties and the rules, bar in the words only.
   - **No command to the valve yet** (`Boolean.Set` of shelly-client is there for the alarms of the epic);
     `lastCommandConfirmed` of the task comes with the first command.
   - **Rehearsed** (2026-11-04): the released 0.6.1 image applied V1-V2 on a throwaway PostgreSQL with SSL (a user

@@ -1,6 +1,7 @@
 package cloud.cholewa.water.database.repository;
 
 import cloud.cholewa.water.database.model.ConsumptionBucket;
+import cloud.cholewa.water.database.model.WaterAlertEntity;
 import cloud.cholewa.water.database.model.WaterBillEntity;
 import cloud.cholewa.water.model.ImportedDay;
 import org.flywaydb.core.Flyway;
@@ -28,7 +29,7 @@ import java.util.TimeZone;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-//The SQL of the bills and of the imported consumption (HAS-318, V4) - PostgreSQL's own, against a PostgreSQL in Docker on
+//The SQL of the bills and of the imported consumption (HAS-318, V4) and the alarms (HAS-319, V5) - PostgreSQL's own, against a PostgreSQL in Docker on
 //the tables of the migrations, the setup of WaterMeterRepositoryTest. Without a Docker the test fails
 @DataR2dbcTest
 @Testcontainers
@@ -47,6 +48,9 @@ class WaterBillRepositoryTest {
 
     @Autowired
     private ConsumptionImportRepository imports;
+
+    @Autowired
+    private WaterAlertRepository alerts;
 
     @Autowired
     private WaterMeterRepository meter;
@@ -79,7 +83,7 @@ class WaterBillRepositoryTest {
 
     @BeforeEach
     void forgetEverything() {
-        for (final String table : List.of("water_bill", "water_consumption_import", "water_meter_reading")) {
+        for (final String table : List.of("water_bill", "water_consumption_import", "water_meter_reading", "water_alert")) {
             databaseClient.sql("DELETE FROM " + table).then().as(StepVerifier::create).verifyComplete();
         }
     }
@@ -196,6 +200,22 @@ class WaterBillRepositoryTest {
             .as(StepVerifier::create)
             .assertNext(hours -> assertThat(hours.stream().reduce(BigDecimal.ZERO, BigDecimal::add))
                 .isEqualByComparingTo("0.1"))
+            .verifyComplete();
+    }
+
+    //the episodes of the alarms (HAS-319, V5): at most one open a kind - a second is refused by the partial unique index
+    @Test
+    void should_keep_one_open_alarm_a_kind() {
+        alerts.save(new WaterAlertEntity(null, "no mains", AT, null, null)).as(StepVerifier::create)
+            .assertNext(saved -> assertThat(saved.id()).isNotNull())
+            .verifyComplete();
+        alerts.save(new WaterAlertEntity(null, "frost", AT, AT, null)).as(StepVerifier::create)
+            .expectNextCount(1).verifyComplete();
+        alerts.save(new WaterAlertEntity(null, "no mains", AT.plusHours(1), null, null)).as(StepVerifier::create)
+            .expectError().verify();
+
+        alerts.findByClosedAtIsNull().map(WaterAlertEntity::kind).collectList().as(StepVerifier::create)
+            .assertNext(kinds -> assertThat(kinds).containsExactlyInAnyOrder("no mains", "frost"))
             .verifyComplete();
     }
 

@@ -72,12 +72,34 @@ water:
   # days)
   meter:
     retention: 730d
+  # the alarms of the valve (HAS-319): an alert after the bound, a reminder every reminder-every, an info on the return.
+  # Pressures in kPa (the unit of the valve), temperatures in degrees C, a bare duration is minutes
+  alarm:
+    pressure-low-below: 100
+    pressure-low-after: PT5M
+    offline-after: PT5M
+    frost-below: 3
+    frost-after: PT5M
+    reminder-every: PT1H
+
+# the notifications of the alarms (HAS-319): the exchange is on the same broker as spring.rabbitmq.*, on its own virtual
+# host - a second connection (NotificationRabbitConfig); env is one of the two headers it routes by.
+# cholewa.notification.enabled of cholewa-commons stays unset: its publisher uses the connection to /device
+notification:
+  virtual-host: /notification
+  username: notification
+  # no default on purpose: with one the pod would start and fail every publish (cholewa.required-properties)
+  password: ${notification-rabbitmq-password}
+  exchange: notification
+  env: prod
 
 cholewa:
   # refuses the start before the first bean when one of these has no value (cholewa-commons >= 1.9.0)
   required-properties:
     - property: spring.rabbitmq.password
       variable: rabbitmq-password
+    - property: notification.password
+      variable: notification-rabbitmq-password
 
 server:
   port: 6200
@@ -138,6 +160,10 @@ internal:
   service:
     database: http://localhost:6005
 
+# a local run never posts to the channel of the house: dev is routed to the dev queues
+notification:
+  env: dev
+
 server:
   port: 6006
 management:
@@ -174,6 +200,10 @@ rabbitmq:
 internal:
   service:
     database: http://localhost:1
+
+notification:
+  password: test
+  env: test
 
 # second line of defence: SchedulingConfig schedules nothing under this profile, and should anything in a
 # test call the Shelly all the same, it must not reach the device of the house

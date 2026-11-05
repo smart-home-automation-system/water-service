@@ -44,6 +44,20 @@ minute, keeps them in memory, stores the counter whenever it changes and serves 
 (the kind `water valve`). From the stored counter it answers the consumption by day, week, month
 and year on `GET /home/water/consumption` (HAS-317).
 
+It tells the household on Discord (the `alert` and `info` categories of `notification-service`)
+when the valve shows trouble (HAS-319), judged every minute from what is known of the valve:
+
+| Alarm | When | Return |
+|---|---|---|
+| No mains water | the pressure below `water.alarm.pressure-low-below` (100 kPa = 1 bar) in every pass for `pressure-low-after` (5 min) | at or above it for the same time |
+| Not available | the valve not heard - no message and no answer of its RPC - for `offline-after` (5 min) | the first report after it |
+| Frost risk | the water temperature below `frost-below` (3 °C) for `frost-after` (5 min) | at or above it for the same time |
+
+Each is one alert at its bound, a reminder every `reminder-every` (1 h) while it lasts and one
+info on the return naming how long it lasted; a value not known (not fresh) never raises an alarm.
+The open alarms are stored (`water_alert`, `V5`), so a restart neither repeats an alert nor forgets
+a return; an alert that never got through (the broker down with the valve) is said by the return.
+
 Everything is non-blocking (Spring WebFlux / Reactor): the sensor is read with `WebClient`
 using the models from the shared `shelly-client` (the valve with its RPC client and its MQTT
 decoder), PostgreSQL is accessed over **R2DBC**
@@ -81,6 +95,9 @@ the shared `smart-home-sdk`, and errors are rendered through `cholewa-commons`.
   default and the service does not start without it (`cholewa.required-properties`). The `local`
   profile connects to `localhost` and reads `device.dev.water`; without a broker the listener
   retries in the log and the read of every minute still keeps the valve current.
+- Notifications (HAS-319): a second connection to the same broker, virtual host `/notification`,
+  user `notification`; `notification-rabbitmq-password` has no default either. The `local`
+  profile publishes with `env: dev`, so a local run never reaches the channel of the house.
 - The device registry: `internal.service.database` (`http://localhost:6005` in `local` - a
   port-forward to `database-service`).
 - The sensor address comes from `shelly.sensor.uni.hot-water.host` / `.port`. When the sensor
@@ -279,7 +296,8 @@ endpoints above do not surface it.
   `measured_at`, `last_checked_at`); the bills (`V4`): `water_bill` (the period, `billed_volume_m3`,
   `meter_reading_m3`, `amount`, `note`, `created_at`, `updated_at`) and `water_consumption_import`
   (`day`, `volume_m3` - the history of the Shelly cloud, kept apart from `water_meter_reading`,
-  whose latest row and deltas go by `id`).
+  whose latest row and deltas go by `id`); the alarms (`V5`): `water_alert` (`kind`, `opened_at`,
+  `last_told_at`, `closed_at`; at most one open a kind).
 - **The valve:** a snapshot every minute of what is fresh - a row of `water_meter_reading` only when
   the counter changed (otherwise `last_checked_at` of the latest row moves), the one row of
   `water_valve_status` updated (its `measured_at` only with a change of a value). The readings older
