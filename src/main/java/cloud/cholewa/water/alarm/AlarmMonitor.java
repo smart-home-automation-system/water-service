@@ -4,6 +4,8 @@ import cloud.cholewa.commons.notification.NotificationPublisher;
 import cloud.cholewa.commons.scheduling.ScheduledPass;
 import cloud.cholewa.water.database.model.WaterAlertEntity;
 import cloud.cholewa.water.database.repository.WaterAlertRepository;
+import cloud.cholewa.water.presence.HouseOccupancy;
+import cloud.cholewa.water.presence.PresenceClient;
 import cloud.cholewa.water.registry.ValveRegistry;
 import cloud.cholewa.water.valve.Reported;
 import cloud.cholewa.water.valve.ValveProperties;
@@ -24,11 +26,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Stream;
 
-//The monitor of the alarms of the water valve (HAS-319): every minute the state in memory judged by AlarmRules - the
-//pressure and the water temperature as far as they are fresh (water.valve.stale-after), the newest report for the
-//silence - the decision held at once, the notifications sent, then the rows of water_alert stored; a row the database
-//does not take is tried again with every pass. Nothing is judged while no valve is registered.
+//The monitor of the alarms of the water valve (HAS-319) and of its flow (HAS-320): every minute the state in memory
+//judged by AlarmRules - the pressure and the water temperature as far as they are fresh (water.valve.stale-after), the
+//newest report for the silence - and by FlowRules - the runs of FlowTrack and whether the house is empty, read from
+//presence-service in the pass (a failed read is unknown, never empty). The decision is held at once, the notifications
+//sent, then the rows of water_alert stored; a row the database does not take is tried again with every pass. Nothing is
+//judged while no valve is registered.
+//While the rate of the flow is not fresh - the valve publishes it on a change only, and the read of every minute
+//failed - the litres of the last whole minute of the counter are the flow, handed to FlowTrack at the pass.
 //After a start nothing is decided before the open episodes are read from the database (tried again with every pass): a
 //restart neither repeats an alert nor forgets a return. A notification neither fails nor stalls the pass: each is cut
 //off after NOTICE_TIMEOUT and its failure logged with its text; what it would have changed waits for the next pass. The
@@ -38,32 +45,45 @@ import java.util.concurrent.atomic.AtomicReference;
 public class AlarmMonitor {
 
     static final Duration LIMIT = Duration.ofSeconds(50);
-    //three notices of a pass at most fit in the bound of the pass
+    //a confirm the broker gives later than this would be published again with the next pass. Six notices of a pass at
+    //most - one of each alarm - would not all fit in the bound of the pass if each hung; the pass is then cut off and
+    //what was not published is due with the next one
     static final Duration NOTICE_TIMEOUT = Duration.ofSeconds(10);
+    static final Duration PRESENCE_TIMEOUT = Duration.ofSeconds(10);
 
     private final ValveRegistry valveRegistry;
     private final ValveTracker valveTracker;
+    private final FlowTrack flowTrack;
+    private final PresenceClient presenceClient;
     private final WaterAlertRepository waterAlertRepository;
     private final NotificationPublisher notificationPublisher;
     private final AlarmProperties alarmProperties;
+    private final FlowProperties flowProperties;
     private final ValveProperties valveProperties;
     private final Clock clock;
     private final AtomicReference<AlarmWatch> watch;
+    private final AtomicReference<House> house = new AtomicReference<>(House.UNKNOWN);
 
     public AlarmMonitor(
         final ValveRegistry valveRegistry,
         final ValveTracker valveTracker,
+        final FlowTrack flowTrack,
+        final PresenceClient presenceClient,
         final WaterAlertRepository waterAlertRepository,
         final NotificationPublisher notificationPublisher,
         final AlarmProperties alarmProperties,
+        final FlowProperties flowProperties,
         final ValveProperties valveProperties,
         final Clock clock
     ) {
         this.valveRegistry = valveRegistry;
         this.valveTracker = valveTracker;
+        this.flowTrack = flowTrack;
+        this.presenceClient = presenceClient;
         this.waterAlertRepository = waterAlertRepository;
         this.notificationPublisher = notificationPublisher;
         this.alarmProperties = alarmProperties;
+        this.flowProperties = flowProperties;
         this.valveProperties = valveProperties;
         this.clock = clock;
         this.watch = new AtomicReference<>(AlarmWatch.notLoaded(now()));
@@ -71,6 +91,10 @@ public class AlarmMonitor {
 
     AlarmWatch current() {
         return watch.get();
+    }
+
+    House house() {
+        return house.get();
     }
 
     @Scheduled(initialDelayString = "PT1M", fixedDelayString = "PT1M")
@@ -103,21 +127,73 @@ public class AlarmMonitor {
         return Mono.fromSupplier(watch::get)
             .filter(AlarmWatch::loaded)
             .filter(held -> valveRegistry.current().isPresent())
-            .flatMap(held -> {
+            .flatMap(held -> occupancy().flatMap(read -> {
                 final LocalDateTime now = now();
-                final AlarmRules.Decision decision = AlarmRules.decide(held, readings(now), now, alarmProperties);
-                watch.set(decision.next());
-                return Flux.fromIterable(decision.notices())
+                final House before = house.get();
+                final House known = logged(before, before.read(read, now));
+                house.set(known);
+                final ValveState state = valveTracker.current();
+                final ValveState fresh = state.freshOnly(now, valveProperties.staleAfter());
+                final AlarmRules.Decision valve = AlarmRules.decide(held, readings(state, fresh), now, alarmProperties);
+                final AlarmRules.Decision flow = flow(valve, fresh, known, now);
+                watch.set(flow.next());
+                return Flux.fromStream(Stream.concat(valve.notices().stream(), flow.notices().stream()))
                     .concatMap(this::send)
                     .then(Mono.defer(this::store));
-            });
+            }));
     }
 
-    private AlarmRules.Readings readings(final LocalDateTime now) {
-        final ValveState state = valveTracker.current();
-        final ValveState fresh = state.freshOnly(now, valveProperties.staleAfter());
+    //whether anybody is at home now; presence-service that cannot be read is not known - never empty
+    private Mono<HouseOccupancy> occupancy() {
+        return presenceClient.residents()
+            .timeout(PRESENCE_TIMEOUT)
+            .map(residents -> HouseOccupancy.judge(residents, now()))
+            .onErrorResume(failure -> Mono.fromSupplier(() -> {
+                log.debug("presence-service was not read: {}", failure.toString());
+                return HouseOccupancy.UNKNOWN;
+            }));
+    }
+
+    private static House logged(final House before, final House after) {
+        if (after.occupancy() != before.occupancy()) {
+            if (after.occupancy() == HouseOccupancy.UNKNOWN) {
+                log.warn("Whether anybody is at home is not known now (was {}): no flow alarm of the empty house",
+                    before.occupancy().value());
+            } else {
+                log.info("The house is {} (was {})", after.occupancy().value(), before.occupancy().value());
+            }
+        }
+        return after;
+    }
+
+    private static AlarmRules.Readings readings(final ValveState state, final ValveState fresh) {
         return new AlarmRules.Readings(valueOf(fresh.pressure()), valueOf(fresh.temperature()),
             state.newestReport().orElse(null));
+    }
+
+    //the flow alarms after the alarms of the valve: a defect in them is logged and decides nothing, it never takes the
+    //alarms of the mains, the silence and frost with it
+    private AlarmRules.Decision flow(final AlarmRules.Decision valve, final ValveState fresh, final House known,
+                                     final LocalDateTime now) {
+        try {
+            return FlowRules.decide(valve.next(), flowReadings(fresh, known, now), now, flowProperties, alarmProperties);
+        } catch (final RuntimeException failure) {
+            log.error("The flow alarms of the water valve were not judged in this pass", failure);
+            return new AlarmRules.Decision(valve.next(), List.of());
+        }
+    }
+
+    //the flow now: the rate while it is fresh, the litres of the last minute of the counter while only that is - handed
+    //to the track, the rate reports it no longer - or not known
+    private FlowRules.Readings flowReadings(final ValveState fresh, final House known, final LocalDateTime now) {
+        final Double rate = valueOf(fresh.flowRate());
+        final Double lastMinute = valueOf(fresh.lastMinute());
+        if (rate == null && lastMinute != null) {
+            flowTrack.flow(lastMinute, now);
+        }
+        //boxed on purpose: a double in one branch would unbox the null of the other
+        final Double litres = rate != null ? Double.valueOf(ValveTracker.litres(rate)) : lastMinute;
+        return new FlowRules.Readings(flowTrack.current(), litres != null, litres, known);
     }
 
     private static Double valueOf(final Reported<Double> reported) {

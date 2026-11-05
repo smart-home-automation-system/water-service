@@ -29,6 +29,7 @@ final class AlarmMessages {
             case NO_MAINS -> "No mains water: " + state(alarm, episode, now, value, properties) + ".";
             case FROST -> "Frost risk: " + state(alarm, episode, now, value, properties) + ".";
             case OFFLINE -> "Not available: " + state(alarm, episode, now, value, properties) + ".";
+            default -> throw unworded(alarm);
         };
     }
 
@@ -38,6 +39,7 @@ final class AlarmMessages {
             case NO_MAINS -> "Still no mains water: " + state(alarm, episode, now, value, properties) + ".";
             case FROST -> "Still a frost risk: " + state(alarm, episode, now, value, properties) + ".";
             case OFFLINE -> "Still not available: " + state(alarm, episode, now, value, properties) + ".";
+            default -> throw unworded(alarm);
         };
     }
 
@@ -52,6 +54,7 @@ final class AlarmMessages {
             case NO_MAINS -> "Mains water back: " + bar(value) + " - below " + bar(properties.pressureLowBelow()) + span;
             case FROST -> "Frost risk over: " + celsius(value) + " - below " + celsius(properties.frostBelow()) + span;
             case OFFLINE -> "Available again: the water valve - out" + span;
+            default -> throw unworded(alarm);
         };
     }
 
@@ -64,7 +67,13 @@ final class AlarmMessages {
             case FROST -> "the water at the valve is " + celsius(value) + since + ", below "
                 + celsius(properties.frostBelow());
             case OFFLINE -> "the water valve has not been heard" + since;
+            default -> throw unworded(alarm);
         };
+    }
+
+    //the flow alarms (HAS-320) are worded by FlowMessages
+    private static IllegalArgumentException unworded(final Alarm alarm) {
+        return new IllegalArgumentException("The " + alarm.wireName() + " alarm is worded by FlowMessages");
     }
 
     private static String notTold(final WaterAlertEntity episode) {

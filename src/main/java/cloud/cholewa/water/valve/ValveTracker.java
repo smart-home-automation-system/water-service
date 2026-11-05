@@ -3,13 +3,15 @@ package cloud.cholewa.water.valve;
 import cloud.cholewa.shelly.model.BooleanStatus;
 import cloud.cholewa.shelly.model.NumberStatus;
 import cloud.cholewa.shelly.model.ObjectStatus;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
@@ -18,10 +20,10 @@ import java.util.concurrent.atomic.AtomicReference;
 //by the read of every minute, read by the API and by the snapshot - one AtomicReference, so a reader always sees a whole
 //state. A message and a read are the valve as it was at their arrival, so the later one wins. Which component is which
 //value is the key of the virtual component of the Neo Smart Water Valve (Shelly X XT1, firmware 2.0.1): boolean:200 the
-//valve, number:200 the flow rate, number:201 the pressure, number:202 the water temperature, object:200 the counter
+//valve, number:200 the flow rate, number:201 the pressure, number:202 the water temperature, object:200 the counter.
+//Every flow rate is also handed to the FlowListener as it arrives (HAS-320, in l/min)
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class ValveTracker {
 
     static final int STATE = 200;
@@ -36,8 +38,21 @@ public class ValveTracker {
         "number", Set.of(FLOW_RATE, PRESSURE, TEMPERATURE),
         "object", Set.of(COUNTER));
 
+    private static final int LITRES_PER_CUBIC_METRE = 3;
+
     private final Clock clock;
+    private final FlowListener flowListener;
     private final AtomicReference<ValveState> latest = new AtomicReference<>(ValveState.UNKNOWN);
+
+    @Autowired
+    public ValveTracker(final Clock clock, final FlowListener flowListener) {
+        this.clock = clock;
+        this.flowListener = flowListener;
+    }
+
+    public ValveTracker(final Clock clock) {
+        this(clock, FlowListener.NONE);
+    }
 
     public ValveState current() {
         return latest.get();
@@ -56,9 +71,13 @@ public class ValveTracker {
             case NumberStatus value when index == PRESSURE -> current.withPressure(new Reported<>(value.getValue(), now));
             case NumberStatus value when index == TEMPERATURE ->
                 current.withTemperature(new Reported<>(value.getValue(), now));
-            case ObjectStatus value when index == COUNTER -> current.withCounterTotal(new Reported<>(totalOf(value), now));
+            case ObjectStatus value when index == COUNTER ->
+                current.withCounter(new Reported<>(totalOf(value), now), new Reported<>(lastMinuteOf(value), now));
             default -> current;
         });
+        if (status instanceof NumberStatus rate && index == FLOW_RATE && rate.getValue() != null) {
+            flowListener.flow(litres(rate.getValue()), now);
+        }
     }
 
     //the last will (false) and the return (true) of the valve on the broker; logged when it changes - it is rare, and
@@ -69,6 +88,9 @@ public class ValveTracker {
         final ValveState before = latest.getAndUpdate(current -> online
             ? current.withOnline(true)
             : ValveState.UNKNOWN.withOnline(false));
+        if (!online) {
+            flowListener.forget();
+        }
         if (!Boolean.valueOf(online).equals(before.online())) {
             log.info("The water valve is {} the broker", online ? "back on" : "off");
         }
@@ -77,12 +99,28 @@ public class ValveTracker {
     //another valve in the registry: what was known is of the one before
     public void reset() {
         latest.set(ValveState.UNKNOWN);
+        flowListener.forget();
     }
 
     //value.counter.total of the counter, in m3; null when the device left it out. A whole number arrives as an Integer
     private static Double totalOf(final ObjectStatus status) {
-        return status.getValue() != null && status.getValue().get("counter") instanceof Map<?, ?> counter
-            && counter.get("total") instanceof Number total ? total.doubleValue() : null;
+        return counterOf(status) instanceof Map<?, ?> counter && counter.get("total") instanceof Number total
+            ? total.doubleValue() : null;
+    }
+
+    //the first of value.counter.by_minute - the litres of the last whole minute, the newest first; null when left out
+    private static Double lastMinuteOf(final ObjectStatus status) {
+        return counterOf(status) instanceof Map<?, ?> counter && counter.get("by_minute") instanceof List<?> minutes
+            && !minutes.isEmpty() && minutes.getFirst() instanceof Number litres ? litres.doubleValue() : null;
+    }
+
+    private static Object counterOf(final ObjectStatus status) {
+        return status.getValue() == null ? null : status.getValue().get("counter");
+    }
+
+    //m3/min of the device as l/min - the unit of the house and of the flow alarms
+    public static double litres(final double cubicMetres) {
+        return BigDecimal.valueOf(cubicMetres).movePointRight(LITRES_PER_CUBIC_METRE).doubleValue();
     }
 
     //cut to what a column of the database keeps, so the API and the database tell the same time

@@ -41,7 +41,8 @@ class ValveTrackerTest {
             .lastUpdateTs(1L).build());
 
         assertThat(sut.current()).isEqualTo(new ValveState(new Reported<>(true, AT), new Reported<>(0.012, AT),
-            new Reported<>(495.04377, AT), new Reported<>(12.9, AT), new Reported<>(61.665843064, AT), null));
+            new Reported<>(495.04377, AT), new Reported<>(12.9, AT), new Reported<>(61.665843064, AT),
+            new Reported<>(0.0, AT), null));
     }
 
     //a whole number of the counter arrives as an Integer
@@ -109,6 +110,46 @@ class ValveTrackerTest {
         sut.online(false);
 
         assertThat(sut.current()).isEqualTo(ValveState.UNKNOWN.withOnline(false));
+    }
+
+    //every flow rate goes to the listener as it arrives, in l/min; the last will and a reset forget the flow (HAS-320)
+    @Test
+    void should_hand_every_flow_rate_to_the_listener_and_tell_it_to_forget() {
+        final List<String> heard = new java.util.ArrayList<>();
+        final ValveTracker tracker = new ValveTracker(Clock.fixed(NOW, HOUSE), new FlowListener() {
+            @Override
+            public void flow(final double litresPerMinute, final LocalDateTime at) {
+                heard.add(litresPerMinute + " at " + at);
+            }
+
+            @Override
+            public void forget() {
+                heard.add("forget");
+            }
+        });
+
+        tracker.report(200, NumberStatus.builder().value(0.0123).build());
+        tracker.report(200, NumberStatus.builder().build());
+        tracker.report(201, NumberStatus.builder().value(495.0).build());
+        tracker.online(false);
+        tracker.online(true);
+        tracker.reset();
+
+        assertThat(heard).containsExactly("12.3 at " + AT, "forget", "forget");
+    }
+
+    //the first of by_minute is the litres of the last whole minute
+    @Test
+    void should_read_the_litres_of_the_last_minute_of_the_counter() {
+        sut.report(200, ObjectStatus.builder()
+            .value(Map.of("counter", Map.of("total", 62, "by_minute", List.of(4.5, 2, 0)))).build());
+
+        assertThat(sut.current().lastMinute()).isEqualTo(new Reported<>(4.5, AT));
+
+        sut.report(200, ObjectStatus.builder().value(Map.of("counter", Map.of("total", 62, "by_minute", List.of())))
+            .build());
+
+        assertThat(sut.current().lastMinute()).isEqualTo(new Reported<>(null, AT));
     }
 
     //what is not reported within the staleness is left out, and the newest report is of what is left
