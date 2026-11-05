@@ -7,14 +7,16 @@ furnace. Since HAS-316 it is also the water meter of the house: the Neo Smart Wa
 garage, from the broker and its RPC, served on `GET /home/water/valve` (epic HAS-310), and since HAS-317
 the consumption by day, week, month and year on `GET /home/water/consumption`; since HAS-318 the bills of
 the waterworks compared with what the house measured, and the daily history imported from the Shelly cloud; since HAS-319
-the alarms of the mains, the valve and frost, and since HAS-320 those of the flow - high, continuous, in an empty house.
+the alarms of the mains, the valve and frost, and since HAS-320 those of the flow - high, continuous, in an empty house; since
+HAS-404 the circulation pump of the hot water (relay 1 of the Shelly Uni): its state and a manual start.
 
 Part of the smart-home-automation-system organization — org-wide conventions, the
 repository map and working rules come from the workspace-level context
 (`organization-repository/claude/organization.md`). The user writes the code in this
 repository themselves; Claude's default role here is analysis, code review and security
 review - the owner had Claude implement the readings of the water valve (HAS-316), the consumption
-(HAS-317), the bills (HAS-318), the alarms (HAS-319, HAS-320) and the command of the valve (HAS-321) and reviews them
+(HAS-317), the bills (HAS-318), the alarms (HAS-319, HAS-320), the command of the valve (HAS-321) and the circulation pump
+(HAS-404) and reviews them
 in IntelliJ.
 
 ## Role in the system
@@ -46,7 +48,7 @@ in IntelliJ.
 - Local run: `home,local` Spring profiles, port `6006` (Actuator `8006`); in-cluster port
   `6200`, Actuator `8200`. Needs PostgreSQL (`database.*`, Flyway runs at startup).
 - Spring Boot **4.1.2** with logbook 4.2.0; `cholewa-commons` 1.13.0, `smart-home-sdk` 1.16.0,
-  `shelly-client` 2.5.0 **with its beans on** since HAS-316 (`ShellyRpcClient`, `ShellyGen1Client`,
+  `shelly-client` 2.6.0 (the timer of a relay, HAS-404) **with its beans on** since HAS-316 (`ShellyRpcClient`, `ShellyGen1Client`,
   `ShellyMqttDecoder` - pinned by `WaterServiceApplicationTest`); own libraries on the latest releases, as
   the org rule asks of every service task.
 - A local run needs `rabbitmq-password` (any value without a broker - the listener then retries in the
@@ -280,6 +282,31 @@ in IntelliJ.
     - `on_power_restore` of the device stays `none` (the owner's setting): after a power cut the state is its first report.
     - `ValveListener` (was `FlowListener` of HAS-320) - `ValveTracker` takes every bean of it: `FlowTrack` and
       `ValveCommands`. `ValveRegistry.known` is the refusal of both `GET` and `POST /valve` (static, so a mock answers it).
+  - **The circulation pump** (HAS-404, package `circulation`, V8 `circulation_run`) - what is easy to break:
+    - **Relay 1 "CIRCULATION" of the Uni has `auto_off` 60 s on the device** (read 2026-11-05): a start sends
+      `/relay/1?turn=on&timer=<max-run>` through `ShellyGen1Client.relay` of shelly-client 2.6.0 - the timer replaces
+      `auto_off` for that switch and is the safety net when the service does not stop the run. Sensor 0 of the Uni is the
+      tank, sensor 1 the circulation (25 °C idle, 49 °C in the tank on that read).
+    - **`CirculationMonitor`** (fixedDelay 5 s, bounded at 45 s) reads `/status` of the Uni every 15 s, every pass while
+      a run goes on (`WaterSensorClient.status`, no log of its own - one WARN when the Uni falls silent, an INFO on the
+      return); the 3-minute read of the temperatures stays as it was. Every read is logged by Logbook with its body
+      (5 760 a day idle).
+    - **When a run ends is `CirculationRules`** (no I/O): a read asked before the start says nothing; the relay off -
+      `limit` near max-run (`TIMER_SLACK` 10 s), otherwise `device`, `failure` for a start the Uni did not answer; the
+      relay on - `temperature` at the target (with `stop-on-return`), `limit` at max-run, both switched off; not heard a
+      minute past max-run - `failure`, ended at the end of the timer.
+    - **`CirculationPump` holds the state** (synchronized: the monitor and a start): the newest read - **a read asked before
+      the one held is dropped** - since when on, the run going on. One instance, `Recreate`.
+    - **A start** reads the Uni (`409 TANK_COLD` below `tank-min`, `502 DEVICE_FAILED` when not read), sends once; a run
+      going on is answered as it is, two starts at once share one (`starting`, a cached `Mono`). Refused: nothing held;
+      not answered: held as `answered = false` and watched, the caller gets the 502. The row is a log - a start whose row
+      fails goes on without an id. A stop of a run that ended already sends nothing.
+    - **A run an earlier pod left open** is ended as `failure` at the end of its timer at the first pass that manages it
+      (`closeOrphans`, the run this pod holds kept by its start).
+    - `DEVICE_FAILED` is shared with the valve, its description "Device failed" since HAS-404 (the valve's `details` say
+      which). The trigger is `manual` today; `motion`, `light`, `window` come with the automation (HAS-405), and so do
+      the conditions of an automatic run. Until then the scene of the Shelly cloud still switches the pump - a pump on
+      without a run of ours is `running` without a trigger.
   - **Rehearsed** (2026-11-04): the released 0.6.1 image applied V1-V2 on a throwaway PostgreSQL with SSL (a user
     with `USAGE, CREATE` on `public` only), the new jar V3 with the real valve and the registry through a
     port-forward, no broker: `/valve` answered the valve within 10 s, a row of the counter a change, the same

@@ -96,6 +96,15 @@ water:
     # the continuous flow and the empty house close the valve at their alert (HAS-321, source rule) - off by the choice of
     # the owner; the high flow never does
     close-on-alarm: false
+  # the circulation pump of the hot water (HAS-404), relay 1 of the Shelly Uni: temperatures in degrees C, a bare duration
+  # is minutes. A run stops once the return reaches return-target (with stop-on-return) or after max-run - also the timer
+  # sent with the start, which flips the relay back should the service not; a start is refused below tank-min.
+  # stop-on-return is decided at the first real start with the owner: false when the sensor is not on the return
+  circulation:
+    return-target: 35
+    max-run: PT3M
+    tank-min: 38
+    stop-on-return: true
 
 # the notifications of the alarms (HAS-319): the exchange is on the same broker as spring.rabbitmq.*, on its own virtual
 # host - a second connection (NotificationRabbitConfig); env is one of the two headers it routes by.

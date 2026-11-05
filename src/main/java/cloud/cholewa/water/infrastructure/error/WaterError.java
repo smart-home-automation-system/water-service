@@ -33,9 +33,13 @@ public enum WaterError implements ErrorId {
     //(HAS-321)
     INVALID_COMMAND("Invalid valve command"),
 
-    //the valve refused the command or did not answer it; only its status, if it answered, goes past the first hop
-    //(HAS-321)
-    DEVICE_FAILED("Water valve failed");
+    //the valve or the circulation pump refused the command or did not answer it; only its status, if it answered, goes
+    //past the first hop (HAS-321, HAS-404)
+    DEVICE_FAILED("Device failed"),
+
+    //a start of the circulation refused: the tank is below water.circulation.tank-min - the pump would push cold water
+    //round (HAS-404)
+    TANK_COLD("Hot water tank too cold");
 
     private final String description;
 }
