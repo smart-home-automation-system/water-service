@@ -18,7 +18,16 @@ public enum WaterError implements ErrorId {
     REGISTRY_UNAVAILABLE("Device registry unavailable"),
 
     //a range of the consumption that is not day, week, month or year, or a date that is not YYYY-MM-DD (HAS-317)
-    INVALID_RANGE("Invalid consumption range");
+    INVALID_RANGE("Invalid consumption range"),
+
+    //a bill the API refuses - its reason in details: its period, a volume or an amount, an overlap with another (HAS-318)
+    INVALID_BILL("Invalid water bill"),
+
+    //no bill of that id (HAS-318)
+    NOT_FOUND_BILL("Water bill not found"),
+
+    //an import of the daily consumption the API refuses - its reason in details (HAS-318)
+    INVALID_IMPORT("Invalid consumption import");
 
     private final String description;
 }

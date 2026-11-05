@@ -3,16 +3,22 @@ package cloud.cholewa.water.api;
 import cloud.cholewa.water.config.ExceptionHandlerConfig;
 import cloud.cholewa.water.infrastructure.error.ValveException;
 import cloud.cholewa.water.model.ConsumptionReply;
+import cloud.cholewa.water.model.ImportedDay;
+import cloud.cholewa.water.service.ConsumptionImportService;
 import cloud.cholewa.water.service.ConsumptionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webflux.test.autoconfigure.WebFluxTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.json.JsonCompareMode;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -32,6 +38,9 @@ class ConsumptionControllerTest {
 
     @MockitoBean
     private ConsumptionService consumptionService;
+
+    @MockitoBean
+    private ConsumptionImportService consumptionImportService;
 
     @Test
     void should_answer_the_consumption() {
@@ -68,6 +77,36 @@ class ConsumptionControllerTest {
             .expectBody().json("""
                 {"range": "month", "from": "2026-11-01T00:00:00", "to": "2026-12-01T00:00:00", "unit": "m3", "buckets": []}
                 """, JsonCompareMode.STRICT);
+    }
+
+    @Test
+    void should_answer_and_replace_the_imported_days() {
+        final List<ImportedDay> days = List.of(new ImportedDay(LocalDate.of(2026, 10, 1), new BigDecimal("0.512")));
+        when(consumptionImportService.all()).thenReturn(Flux.fromIterable(days));
+        when(consumptionImportService.replace(days)).thenReturn(Mono.empty());
+
+        webTestClient.get().uri("/consumption/imported").exchange()
+            .expectStatus().isOk()
+            .expectBody().json("""
+                [{"day": "2026-10-01", "volume": 0.512}]
+                """, JsonCompareMode.STRICT);
+        webTestClient.put().uri("/consumption/imported").contentType(MediaType.APPLICATION_JSON)
+            .bodyValue("""
+                [{"day": "2026-10-01", "volume": 0.512}]
+                """)
+            .exchange()
+            .expectStatus().isNoContent();
+    }
+
+    @Test
+    void should_refuse_an_import_with_its_code() {
+        when(consumptionImportService.replace(any()))
+            .thenReturn(Mono.error(ValveException.invalidImport("The day 2026-11-05 is sent twice")));
+
+        webTestClient.put().uri("/consumption/imported").contentType(MediaType.APPLICATION_JSON).bodyValue("[]")
+            .exchange()
+            .expectStatus().isBadRequest()
+            .expectBody().jsonPath("$.errors[0].code").isEqualTo("INVALID_IMPORT");
     }
 
     //a missing range is refused by the service with its code, never by WebFlux without one

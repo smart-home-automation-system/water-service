@@ -12,7 +12,8 @@ import java.util.List;
  * {@code total} - the water of the range, {@code previousTotal} - of the same range one period earlier; each left out
  * when the counter was not watched in its range (missing is never 0).<br>
  * {@code buckets} - one per bucket in which the counter was watched, oldest first: a day in hours, a week and a month in
- * days, a year in months. A bucket without a point is a gap in the readings, a bucket without water has 0.<br>
+ * days, a year in months. A bucket without a point is a gap in the readings, a bucket without water has 0. A day
+ * imported from the Shelly cloud (HAS-318) counts as watched - not in a day of hours, the import is daily.<br>
  * Volumes in m3 with 3 decimals. Every date-time is wall-clock time of the house: the hour skipped in spring is a bucket
  * of 0 (the counter was watched across it), the hour repeated in autumn is one bucket with the water of both.
  */

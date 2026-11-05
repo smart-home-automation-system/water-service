@@ -90,7 +90,9 @@ the shared `smart-home-sdk`, and errors are rendered through `cholewa-commons`.
 
 # API
 
-Base path `/home/water` (`spring.webflux.base-path`). Every endpoint is read-only.
+Base path `/home/water` (`spring.webflux.base-path`). Everything is read-only but the bills and the
+imported consumption (HAS-318); like every service behind the gateway, the writes are not
+authenticated - access is LAN / VPN only.
 
 | Method | Path | Description |
 |---|---|---|
@@ -99,6 +101,8 @@ Base path `/home/water` (`spring.webflux.base-path`). Every endpoint is read-onl
 | `GET` | `/home/water/temperature/history?from=&to=` | The stored temperatures over a range, averaged into buckets — see below. |
 | `GET` | `/home/water/valve` | The water valve now — see below. |
 | `GET` | `/home/water/consumption?range=&at=` | The water used by day, week, month or year, with the period before — see below. |
+| `GET`, `PUT` | `/home/water/consumption/imported` | The daily consumption imported from the Shelly cloud — see below. |
+| `GET`, `POST`, `PUT`, `DELETE` | `/home/water/bills`, `/home/water/bills/{id}` | The bills of the waterworks with what the house measured — see below. |
 
 ## The water valve
 
@@ -159,6 +163,64 @@ stored readings of the counter:
   both (the rule of the temperature history).
 - `400` `INVALID_RANGE` for a range that is not one of the four (a missing one included) or a date
   that is not `YYYY-MM-DD` within the years 2000 - 2999.
+- **Imported days** (HAS-318, below) count as watched days: a bucket of a day of a week or a
+  month, their share of a month of a year; a day in hours has no imported points.
+
+## Imported consumption
+
+The valve keeps no history itself; the Shelly cloud has the daily consumption since about
+February 2026. It is imported once by hand (no integration with the cloud), so the bills and the
+statistics reach back before the first reading of the house.
+
+- `GET /home/water/consumption/imported` - `[{"day": "2026-10-01", "volume": 0.512}]`, oldest first.
+- `PUT /home/water/consumption/imported` with the same list **replaces the whole import** (`204`)
+  - sent again, it fixes what was sent before. A day must not be after the first day of the
+  readings of the house (today while there are none); that first day is watched only from its
+  first reading, so its imported value wins over the measured part (not in hours); volumes in m³, at
+  most three decimals, not negative; at most 3660 days, each once. `400` `INVALID_IMPORT` with the
+  reason in `details`.
+
+## Bills
+
+The bills of the waterworks, entered by the owner (HAS-318), each answered with what the house
+measured over its period:
+
+```json
+{
+  "id": 7,
+  "periodFrom": "2026-09-29",
+  "periodTo": "2026-10-20",
+  "billedVolume": 11.000,
+  "meterReading": 1234.500,
+  "amount": 98.76,
+  "note": "Waterworks",
+  "measuredVolume": 11.020,
+  "difference": 0.020,
+  "differencePercent": 0.2,
+  "createdAt": "2026-11-05T10:00:00",
+  "updatedAt": "2026-11-05T10:00:00"
+}
+```
+
+| Method | Path | |
+|---|---|---|
+| `GET` | `/home/water/bills` | Every bill, newest period first. |
+| `GET` | `/home/water/bills/{id}` | One bill. |
+| `POST` | `/home/water/bills` | Enter a bill - `201` with it. |
+| `PUT` | `/home/water/bills/{id}` | Replace a bill whole (no partial update) - its id and `createdAt` stay. |
+| `DELETE` | `/home/water/bills/{id}` | `204`. |
+
+- The body: `periodFrom`, `periodTo` (whole days, both included) and `billedVolume` (m³, three
+  decimals) required; `meterReading` (m³), `amount` (PLN, two decimals) and `note` (500
+  characters) optional.
+- `measuredVolume` is the water from `periodFrom` 00:00 to `periodTo` 24:00 - the daily
+  consumption above, imported days included; `difference` is measured less billed, and
+  `differencePercent` its share of the billed volume. **All three are left out** (missing is never
+  0) when a day of the period has neither readings nor an imported value; the percent also when
+  nothing was billed.
+- `400` `INVALID_BILL` with the reason in `details` - a missing field, `periodTo` before
+  `periodFrom` or in the future, a negative volume or amount, too many decimals, a period that
+  shares a day with another bill; `404` `NOT_FOUND_BILL`.
 
 ## Temperature history
 
@@ -214,7 +276,10 @@ endpoints above do not surface it.
   `circulation` as `NUMERIC(5,2)` — with an index on `updated_at` (`V2`); the tables of the valve
   (`V3`): `water_meter_reading` (`total_m3 NUMERIC(18,9)`, `measured_at`, `last_checked_at`) and
   `water_valve_status` (one row: `open`, `flow_rate` m³/min, `pressure` kPa, `temperature`,
-  `measured_at`, `last_checked_at`).
+  `measured_at`, `last_checked_at`); the bills (`V4`): `water_bill` (the period, `billed_volume_m3`,
+  `meter_reading_m3`, `amount`, `note`, `created_at`, `updated_at`) and `water_consumption_import`
+  (`day`, `volume_m3` - the history of the Shelly cloud, kept apart from `water_meter_reading`,
+  whose latest row and deltas go by `id`).
 - **The valve:** a snapshot every minute of what is fresh - a row of `water_meter_reading` only when
   the counter changed (otherwise `last_checked_at` of the latest row moves), the one row of
   `water_valve_status` updated (its `measured_at` only with a change of a value). The readings older
