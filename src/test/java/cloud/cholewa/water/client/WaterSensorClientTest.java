@@ -3,8 +3,9 @@ package cloud.cholewa.water.client;
 import cloud.cholewa.water.config.WaterSensorConfig;
 import cloud.cholewa.water.infrastructure.error.WaterException;
 import lombok.SneakyThrows;
-import okhttp3.mockwebserver.MockResponse;
-import okhttp3.mockwebserver.MockWebServer;
+import mockwebserver3.MockResponse;
+import mockwebserver3.MockWebServer;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
@@ -15,6 +16,7 @@ import reactor.test.StepVerifier;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
+//mockwebserver3 since HAS-316 (the legacy mockwebserver brought JUnit 4 and an older okhttp)
 class WaterSensorClientTest {
 
     private MockWebServer mockWebServer;
@@ -30,12 +32,17 @@ class WaterSensorClientTest {
         sut = new WaterSensorClient(config, WebClient.create());
     }
 
+    @AfterEach
+    void tearDown() {
+        mockWebServer.close();
+    }
+
     @Test
     void should_return_temperature_values() {
-        mockWebServer.enqueue(new MockResponse()
-            .setResponseCode(HttpStatus.OK.value())
+        mockWebServer.enqueue(new MockResponse.Builder()
+            .code(HttpStatus.OK.value())
             .addHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-            .setBody("""
+            .body("""
                 {
                     "ext_temperature": {
                         "0": {
@@ -47,6 +54,7 @@ class WaterSensorClientTest {
                     }
                 }
                 """)
+            .build()
         );
 
         sut.getTemperatures()
@@ -61,7 +69,7 @@ class WaterSensorClientTest {
 
     @Test
     void should_return_error_status() {
-        mockWebServer.enqueue(new MockResponse().setResponseCode(HttpStatus.INTERNAL_SERVER_ERROR.value()));
+        mockWebServer.enqueue(new MockResponse.Builder().code(HttpStatus.INTERNAL_SERVER_ERROR.value()).build());
 
         sut.getTemperatures()
             .as(StepVerifier::create)

@@ -3,13 +3,15 @@
 Watches the domestic hot-water circuit. Every three minutes it reads two temperatures (hot
 water, circulation) from a Shelly Uni sensor, stores the reading and recomputes one flag:
 does the water need heating? `boiler-service` polls that flag to drive the pumps and the
-furnace.
+furnace. Since HAS-316 it is also the water meter of the house: the Neo Smart Water Valve in the
+garage, from the broker and its RPC, served on `GET /home/water/valve` (epic HAS-310).
 
 Part of the smart-home-automation-system organization — org-wide conventions, the
 repository map and working rules come from the workspace-level context
 (`organization-repository/claude/organization.md`). The user writes the code in this
 repository themselves; Claude's default role here is analysis, code review and security
-review.
+review - the owner had Claude implement the readings of the water valve (HAS-316) and reviews them in
+IntelliJ.
 
 ## Role in the system
 
@@ -17,11 +19,15 @@ review.
   network) and, through `api-gateway-service`, by anything outside the cluster
   (`/home/water/**`) — today the web dashboard, which reads `status/temperature` and, from
   HAS-201 on, `temperature/history`.
-- Calls: the Shelly Uni sensor on the LAN over HTTP, and PostgreSQL. No RabbitMQ.
-- Owns its own database, `home-automation-water` — one append-only table, `temperature`,
-  indexed on `updated_at` (`V2`).
-- Uses libraries: `cholewa-commons`, `smart-home-sdk` (`SystemActiveReply`),
-  `shelly-client` (the sensor models).
+- Calls: the Shelly Uni sensor on the LAN over HTTP, the water valve over its RPC
+  (`Shelly.GetComponents`, HAS-316), `database-service` for the valve of the device registry
+  (`GET /home/device/registry?kind=water valve&enabled=true`), and PostgreSQL.
+- Consumes: `device.prod.water` on `/device` (user `device`, `rabbitmq-password`) - every device
+  event, of which only the valve is read (HAS-316).
+- Owns its own database, `home-automation-water` — the append-only `temperature`, indexed on
+  `updated_at` (`V2`), and the tables of the valve (`V3`).
+- Uses libraries: `cholewa-commons`, `smart-home-sdk` (`SystemActiveReply`, `SmartDevice`),
+  `shelly-client` (the sensor models; the valve with `ShellyRpcClient` and `ShellyMqttDecoder`).
 - It is the scaffold for **new** services (the `new-service` skill copies its pom,
   `Dockerfile` and workflows), so what is changed here spreads.
 
@@ -32,10 +38,12 @@ review.
   skipped.
 - Local run: `home,local` Spring profiles, port `6006` (Actuator `8006`); in-cluster port
   `6200`, Actuator `8200`. Needs PostgreSQL (`database.*`, Flyway runs at startup).
-- Spring Boot **4.1.2** (HAS-307) with logbook 4.2.0; `cholewa-commons` 1.11.0, `smart-home-sdk` 1.12.0,
-  `shelly-client` 2.1.0 (its own clients and MQTT decoder switched off - `shelly.client.enabled: false`,
-  pinned by `WaterServiceApplicationTest`); own libraries on the latest releases, as the org rule asks of
-  every service task.
+- Spring Boot **4.1.2** with logbook 4.2.0; `cholewa-commons` 1.13.0, `smart-home-sdk` 1.16.0,
+  `shelly-client` 2.5.0 **with its beans on** since HAS-316 (`ShellyRpcClient`, `ShellyGen1Client`,
+  `ShellyMqttDecoder` - pinned by `WaterServiceApplicationTest`); own libraries on the latest releases, as
+  the org rule asks of every service task.
+- A local run needs `rabbitmq-password` (any value without a broker - the listener then retries in the
+  log) and a port-forward of `database-service` to 6005 for the registry.
 
 ## Specifics
 
@@ -45,8 +53,9 @@ review.
   database — is logged and swallowed (`onErrorComplete`), and the flag keeps its last value.
   So a database outage freezes the flag: if it was `true`, `boiler-service` keeps heating
   until a write succeeds again. After a restart the flag starts as `false`.
-- **`database.pool.max-size` is 2**, this service's share of the 22 connections of the
-  managed database (heating 2 / database 4 / water 2 / presence 2 = 10). It was 4 up to and
+- **`database.pool.max-size` is 2**, this service's share of the 47 connections of the
+  managed database (20 allotted to the project; the paragraph below is the history of the budget of 22).
+  The valve (HAS-316) adds two statements a minute (the snapshot) and one a night - the share stays 2. It was 4 up to and
   including 0.5.0 (HAS-169): the Deployment rolls, so during a rollout the old and the new pod
   each hold a pool and Flyway adds one JDBC connection; with this split even the three
   rolling services at once stay at 21. One poll every three minutes needs no more, but
@@ -114,6 +123,47 @@ review.
   pom), so a test without `@ActiveProfiles` does not switch the log output to JSON for the
   classes that follow. The `includes` match only `**/*Test.java` and `**/*IT.java` — a class
   named `...Tests` silently stops running.
-- **Tests still use the legacy `com.squareup.okhttp3:mockwebserver`**, which brings JUnit 4
-  onto the classpath — a JUnit 4 test compiles and never runs. `mockwebserver3` is the
-  replacement (see `presence-service`); not migrated yet.
+- **Tests use `mockwebserver3`** since HAS-316: the legacy `com.squareup.okhttp3:mockwebserver` brought
+  JUnit 4 and an older okhttp, which broke `mockwebserver3` next to it - `WaterSensorClientTest` was
+  converted and the legacy dependency removed.
+- **The water valve** (HAS-316, packages `registry`, `valve`, `rabbit`) - what is easy to break:
+  - **One instance, never scaled**: the state of the valve lives in memory, so the Deployment is
+    `Recreate` (it was RollingUpdate before - two pods would have split the events of the queue).
+  - **Which component is which** is the key of the virtual component (`ValveTracker`): `boolean:200` the
+    valve (`true` open), `number:200` the flow m³/min, `number:201` the pressure kPa, `number:202` the
+    water temperature, `object:200` the counter - `value.counter.total` m³ read from the open map. A
+    status of a virtual component has **no id**; shelly-client 2.5.0 judges it by `last_update_ts`.
+  - `ValveRegistry` reads `?kind=water valve&enabled=true` at the start and every 5 min (bounded at 1 min);
+    a failed read keeps the valve, before the first one `GET /valve` answers `503 REGISTRY_UNAVAILABLE`,
+    none registered `404 NOT_FOUND_VALVE` (one INFO when it becomes so). Of more valves the lowest id
+    (a WARN). **Another device id forgets the state** (`ValveTracker.reset`).
+  - `DeviceEventConsumer` hands every event to `ValveEventRouter`, which picks the valve **by the routing
+    key before a body is read** (about 130 messages a minute), case-insensitive on the device id; a body
+    that is not its topic is a WARN without the body; nothing errors out of the listener
+    (`.contextCapture()` last). The `local` profile reads `device.dev.water`.
+  - `ValveReconciliation` reads `Shelly.GetComponents` 10 s after the start and a minute after every read
+    (bounded at 45 s) - **alone it keeps the state current when MQTT is silent** (checked 2026-11-04: the
+    jar without a broker answered the real valve in `/valve`). A failure is one WARN when it starts and an
+    INFO on the return, DEBUG between; a component whose status is not its model the same, per component. The later
+    arrival wins, MQTT or RPC. **The last will (`online false`) forgets every value** (the /code-review of HAS-316) - it
+    would otherwise be served as fresh for minutes after the valve left; the next read brings them back while the RPC
+    answers.
+  - **The time of a value is the time of its report** (house time, cut to microseconds), not
+    `last_update_ts` of the device (the time it last changed - 12 days old for the state of the valve).
+    `water.valve.stale-after` (PT5M, 2 - 60 min, a bare number is minutes) leaves a value out of `/valve`
+    and out of the snapshot. Units of the house in the answer only - l/min, bar, m³ - by `BigDecimal`
+    shifts, the device units in memory and in `water_valve_status`.
+  - `ValveSnapshot` (every minute, bounded at 50 s): `water_meter_reading` **compared with the table, not
+    memory** (one statement - restart-safe; the latest row is the highest id, never the latest `measured_at`, a
+    house time that goes back an hour in October), the total **rounded to the nine decimals of the column first**:
+    the valve reports eleven, and a total the column rounds never equals the stored row - found on the
+    rehearsal, it would have written a row a minute. `water_valve_status` is one row (`CHECK id = 1`), its
+    `measured_at` moves only with a value (the pressure moves with almost every reading).
+  - `MeterRetention` (03:25, bounded at 5 min): `water.meter.retention` (730 days, 366 - 3650, a bare number
+    is days), never the latest row.
+  - **No command to the valve yet** (`Boolean.Set` of shelly-client is there for the alarms of the epic);
+    `lastCommandConfirmed` of the task comes with the first command.
+  - **Rehearsed** (2026-11-04): the released 0.6.1 image applied V1-V2 on a throwaway PostgreSQL with SSL (a user
+    with `USAGE, CREATE` on `public` only), the new jar V3 with the real valve and the registry through a
+    port-forward, no broker: `/valve` answered the valve within 10 s, a row of the counter a change, the same
+    total moving `last_checked_at` across a restart.

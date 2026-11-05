@@ -35,8 +35,17 @@ The decision uses hysteresis so the furnace does not cycle around a single thres
 is switched **on below 38 °C** and **off above 42 °C**, with no change in between. The flag
 lives in memory only — after a restart it starts as `false` until the first successful poll.
 
+It is also the **water meter of the house** (HAS-316): the Neo Smart Water Valve (a Shelly X XT1) in
+the garage reports its state, the flow rate, the water pressure, the water temperature and its
+consumption counter as five virtual components. The service takes them from the device events of
+the broker (`device.prod.water` on `/device`) and reads them over the RPC of the valve every
+minute, keeps them in memory, stores the counter whenever it changes and serves the valve on
+`GET /home/water/valve`. The valve itself comes from the device registry of `database-service`
+(the kind `water valve`).
+
 Everything is non-blocking (Spring WebFlux / Reactor): the sensor is read with `WebClient`
-using the models from the shared `shelly-client`, PostgreSQL is accessed over **R2DBC**
+using the models from the shared `shelly-client` (the valve with its RPC client and its MQTT
+decoder), PostgreSQL is accessed over **R2DBC**
 (Spring Data R2DBC) and the schema is managed by **Flyway**. `SystemActiveReply` comes from
 the shared `smart-home-sdk`, and errors are rendered through `cholewa-commons`.
 
@@ -56,8 +65,8 @@ the shared `smart-home-sdk`, and errors are rendered through `cholewa-commons`.
   `ConnectionFactory`, this service declares no `DbConfig` of its own. They have placeholder
   defaults (`localhost:5432`) and the pool does not open connections eagerly, so the context
   starts without them and fails on the first query instead. Only `database.pool.max-size: 2`
-  is pinned here, as this service's share of the 22 backend connections the managed database
-  allows, sized so that a rollout — two pods, two pools and the Flyway connection of the new
+  is pinned here, as this service's share of the 47 backend connections the managed database
+  allows (20 allotted to the project), sized so that a rollout — two pods, two pools and the Flyway connection of the new
   one — still fits; the rest of the pool settings come from the library defaults. Since
   `cholewa-commons` 1.5 those include validating every connection on acquire (`SELECT 1`,
   2 s) and a 30-minute connection lifetime, so a connection that stopped answering is
@@ -67,6 +76,12 @@ the shared `smart-home-sdk`, and errors are rendered through `cholewa-commons`.
   no extra flag. Override with `--flyway-url=...` only when migrations have to target a
   different URL than the connection properties describe. Flyway is enabled in `home`/`local`
   and disabled in the `test` profile.
+- RabbitMQ: the device events on `/device` as the user `device`; `rabbitmq-password` has no
+  default and the service does not start without it (`cholewa.required-properties`). The `local`
+  profile connects to `localhost` and reads `device.dev.water`; without a broker the listener
+  retries in the log and the read of every minute still keeps the valve current.
+- The device registry: `internal.service.database` (`http://localhost:6005` in `local` - a
+  port-forward to `database-service`).
 - The sensor address comes from `shelly.sensor.uni.hot-water.host` / `.port`. When the sensor
   is unreachable the scheduled poll logs the error and skips the cycle — the service keeps
   running, it simply stores no new reading, so `status/temperature` keeps returning the last
@@ -81,6 +96,33 @@ Base path `/home/water` (`spring.webflux.base-path`). All three endpoints are re
 | `GET` | `/home/water/status/active` | Whether the hot water currently needs heating — `SystemActiveReply` (`{"active": true\|false}`) from `smart-home-sdk`. Recomputed on every successful sensor poll with the 38/42 °C hysteresis described above. |
 | `GET` | `/home/water/status/temperature` | The most recent stored reading — `TemperatureReply` with `measuredAt`, `water.temperature` and `circulation.temperature` in °C. `measuredAt` is when the sensor was read — a local date-time of the house, to the second, without an offset. The service repeats its last reading for as long as the sensor is silent, so `measuredAt` is what tells a current reading from an old one. `circulation.pumpActive` is part of the model but is not populated yet, so it is always `false`. Before the first reading is stored the response is empty (`200` with no body). |
 | `GET` | `/home/water/temperature/history?from=&to=` | The stored temperatures over a range, averaged into buckets — see below. |
+| `GET` | `/home/water/valve` | The water valve now — see below. |
+
+## The water valve
+
+`GET /home/water/valve` answers what is in memory, never a call to the valve:
+
+```json
+{
+  "state": "open",
+  "flowRate": 0.0,
+  "pressure": 4.7,
+  "temperature": 11.7,
+  "counter": {"total": 61.722, "measuredAt": "2026-11-04T21:15:57"},
+  "measuredAt": "2026-11-04T21:15:57"
+}
+```
+
+- `state` `open` / `closed` (`boolean:200`), `flowRate` l/min (`number:200`, reported in m³/min),
+  `pressure` bar with two decimals (`number:201`, reported in kPa), `temperature` °C
+  (`number:202`), `counter.total` m³ with three decimals (`object:200`).
+- **A value not reported within `water.valve.stale-after` (5 min) is left out** - never a default,
+  missing is never off; with nothing fresh the answer is `{}`. A value is reported by a message of
+  the broker or by the read of every minute, and `measuredAt` is the time of the report (house
+  time, to the second, without an offset), not the time the value last changed on the device -
+  the newest of what is shown at the top, the counter's under `counter`.
+- `503` `REGISTRY_UNAVAILABLE` until the device registry was read once since the start,
+  `404` `NOT_FOUND_VALVE` while it has no water valve.
 
 ## Temperature history
 
@@ -132,8 +174,15 @@ endpoints above do not surface it.
 
 - **Access:** reactive, via `r2dbc-postgresql` and a Spring Data R2DBC repository.
 - **Migrations:** Flyway (JDBC driver) from `src/main/resources/db/migration`.
-- **Schema:** a single table `temperature` (`V1`) — `id` (identity), `updated_at`, `water` and
-  `circulation` as `NUMERIC(5,2)` — with an index on `updated_at` (`V2`).
+- **Schema:** the table `temperature` (`V1`) — `id` (identity), `updated_at`, `water` and
+  `circulation` as `NUMERIC(5,2)` — with an index on `updated_at` (`V2`); the tables of the valve
+  (`V3`): `water_meter_reading` (`total_m3 NUMERIC(18,9)`, `measured_at`, `last_checked_at`) and
+  `water_valve_status` (one row: `open`, `flow_rate` m³/min, `pressure` kPa, `temperature`,
+  `measured_at`, `last_checked_at`).
+- **The valve:** a snapshot every minute of what is fresh - a row of `water_meter_reading` only when
+  the counter changed (otherwise `last_checked_at` of the latest row moves), the one row of
+  `water_valve_status` updated (its `measured_at` only with a change of a value). The readings older
+  than `water.meter.retention` (730 days) are deleted every night at 03:25, never the latest row.
 - **Writes:** one row per successful poll (every `PT3m`, the first `PT10s` after startup). The
   table is append-only — there is no retention or cleanup job.
 - **Reads:** `status/temperature` returns the newest row by `updated_at`; the history averages
