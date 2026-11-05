@@ -45,7 +45,7 @@ class FlowRulesTest {
             assertThat(notice.alarm()).isEqualTo(Alarm.HIGH_FLOW);
             assertThat(notice.text()).isEqualTo("High water flow: 30 l/min since 10:00 (3 min), above 25 l/min.");
         });
-        assertThat(watch.open().get(Alarm.HIGH_FLOW)).isEqualTo(new WaterAlertEntity(null, "high flow", T0,
+        assertThat(watch.open()).containsEntry(Alarm.HIGH_FLOW, new WaterAlertEntity(null, "high flow", T0,
             T0.plusMinutes(3), null));
     }
 
