@@ -28,7 +28,7 @@ class FlowPropertiesTest {
         contextRunner
             .withPropertyValues("spring.profiles.active=home")
             .run(context -> assertThat(context.getBean(FlowProperties.class)).isEqualTo(new FlowProperties(25.0,
-                Duration.ofMinutes(3), Duration.ofMinutes(1), Duration.ofMinutes(30), 0.5, Duration.ofMinutes(2))));
+                Duration.ofMinutes(3), Duration.ofMinutes(1), Duration.ofMinutes(30), 0.5, Duration.ofMinutes(2), false)));
     }
 
     //without the unit a bare number would bind as milliseconds: an alarm at the first drop

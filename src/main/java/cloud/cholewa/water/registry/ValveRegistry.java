@@ -2,6 +2,7 @@ package cloud.cholewa.water.registry;
 
 import cloud.cholewa.commons.scheduling.ScheduledPass;
 import cloud.cholewa.home.model.SmartDevice;
+import cloud.cholewa.water.infrastructure.error.ValveException;
 import cloud.cholewa.water.valve.ValveTracker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -55,6 +56,16 @@ public class ValveRegistry {
     //the valve of the registry, or nothing - before the first read, and when none is registered
     public Optional<WaterValve> current() {
         return Optional.ofNullable(lastRead.get()).map(Read::valve);
+    }
+
+    //the valve a request acts on: REGISTRY_UNAVAILABLE until the registry was read once, NOT_FOUND_VALVE while it has
+    //none (GET and POST /valve). Static, so that a mock of the registry answers it by its two reads
+    public static Mono<WaterValve> known(final ValveRegistry registry) {
+        return Mono.fromSupplier(registry::isKnown)
+            .filter(Boolean.TRUE::equals)
+            .switchIfEmpty(Mono.error(ValveException::registryUnavailable))
+            .flatMap(read -> Mono.justOrEmpty(registry.current()))
+            .switchIfEmpty(Mono.error(ValveException::notFound));
     }
 
     private void replace(final Read read) {

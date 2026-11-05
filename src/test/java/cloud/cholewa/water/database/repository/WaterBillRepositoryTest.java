@@ -2,6 +2,7 @@ package cloud.cholewa.water.database.repository;
 
 import cloud.cholewa.water.database.model.ConsumptionBucket;
 import cloud.cholewa.water.database.model.WaterAlertEntity;
+import cloud.cholewa.water.database.model.WaterValveCommandEntity;
 import cloud.cholewa.water.database.model.WaterBillEntity;
 import cloud.cholewa.water.model.ImportedDay;
 import org.flywaydb.core.Flyway;
@@ -25,6 +26,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.TimeZone;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -56,6 +58,9 @@ class WaterBillRepositoryTest {
     private WaterMeterRepository meter;
 
     @Autowired
+    private WaterValveCommandRepository commands;
+
+    @Autowired
     private DatabaseClient databaseClient;
 
     @DynamicPropertySource
@@ -83,7 +88,8 @@ class WaterBillRepositoryTest {
 
     @BeforeEach
     void forgetEverything() {
-        for (final String table : List.of("water_bill", "water_consumption_import", "water_meter_reading", "water_alert")) {
+        for (final String table : List.of("water_bill", "water_consumption_import", "water_meter_reading", "water_alert",
+            "water_valve_command")) {
             databaseClient.sql("DELETE FROM " + table).then().as(StepVerifier::create).verifyComplete();
         }
     }
@@ -230,6 +236,25 @@ class WaterBillRepositoryTest {
         alerts.save(new WaterAlertEntity(null, "leak", AT, null, null)).as(StepVerifier::create)
             .expectError().verify();
     }
+    //the commands of the valve (HAS-321, V7): stored, confirmed once - the first confirmation holds; a state that is
+    //neither open nor close is refused
+    @Test
+    void should_keep_a_command_and_its_first_confirmation() {
+        final AtomicLong stored = new AtomicLong();
+        commands.save(new WaterValveCommandEntity(null, AT, "close", "dashboard", null)).as(StepVerifier::create)
+            .consumeNextWith(saved -> stored.set(saved.id()))
+            .verifyComplete();
+        final long id = stored.get();
+
+        commands.confirm(id, AT.plusSeconds(3)).as(StepVerifier::create).expectNext(1).verifyComplete();
+        commands.confirm(id, AT.plusSeconds(50)).as(StepVerifier::create).expectNext(0).verifyComplete();
+        commands.findById(id).map(WaterValveCommandEntity::confirmedAt).as(StepVerifier::create)
+            .expectNext(AT.plusSeconds(3))
+            .verifyComplete();
+        commands.save(new WaterValveCommandEntity(null, AT, "shut", "dashboard", null)).as(StepVerifier::create)
+            .expectError().verify();
+    }
+
     private void reading(final String total, final LocalDateTime measuredAt, final LocalDateTime lastCheckedAt) {
         databaseClient.sql("INSERT INTO water_meter_reading (total_m3, measured_at, last_checked_at) VALUES (:total, :at, :checked)")
             .bind("total", new BigDecimal(total))

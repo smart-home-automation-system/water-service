@@ -19,7 +19,7 @@ class FlowRulesTest {
 
     private static final LocalDateTime T0 = LocalDateTime.of(2026, 11, 5, 10, 0);
     private static final FlowProperties FLOW = new FlowProperties(25.0, Duration.ofMinutes(3), Duration.ofMinutes(1),
-        Duration.ofMinutes(30), 0.5, Duration.ofMinutes(2));
+        Duration.ofMinutes(30), 0.5, Duration.ofMinutes(2), false);
     private static final AlarmProperties ALARM = new AlarmProperties(100.0, Duration.ofMinutes(5),
         Duration.ofMinutes(5), 3.0, Duration.ofMinutes(5), Duration.ofHours(1));
     private static final House OCCUPIED = new House(HouseOccupancy.OCCUPIED, null);

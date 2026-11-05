@@ -93,6 +93,9 @@ water:
     continuous-after: PT30M
     empty-house-above: 0.5
     empty-house-after: PT2M
+    # the continuous flow and the empty house close the valve at their alert (HAS-321, source rule) - off by the choice of
+    # the owner; the high flow never does
+    close-on-alarm: false
 
 # the notifications of the alarms (HAS-319): the exchange is on the same broker as spring.rabbitmq.*, on its own virtual
 # host - a second connection (NotificationRabbitConfig); env is one of the two headers it routes by.

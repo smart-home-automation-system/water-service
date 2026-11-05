@@ -77,6 +77,14 @@ the last whole minute of the counter (`by_minute`) are the flow; while neither i
 opens or closes - the offline alarm speaks for the valve. The reminders and the stored episodes are
 those of the alarms above (`water_alert`, kinds added by `V6`).
 
+It also closes and opens the valve (HAS-321, `POST /home/water/valve`) - the one command that cuts
+the water of the whole house. **Closing on a leak is the owner's choice and off by default**
+(`water.flow.close-on-alarm: false`): when on, the first alert of a continuous flow or of water
+running in an empty house closes the valve first (`source=rule`) and says so, and the end of the
+episode says the valve stays closed; a high flow never closes it (a bath). The valve keeps its
+`on_power_restore` at `none` (the owner's setting): after a power cut its state is what its first
+report says.
+
 Everything is non-blocking (Spring WebFlux / Reactor): the sensor is read with `WebClient`
 using the models from the shared `shelly-client` (the valve with its RPC client and its MQTT
 decoder), PostgreSQL is accessed over **R2DBC**
@@ -129,8 +137,8 @@ the shared `smart-home-sdk`, and errors are rendered through `cholewa-commons`.
 # API
 
 Base path `/home/water` (`spring.webflux.base-path`). Everything is read-only but the bills and the
-imported consumption (HAS-318); like every service behind the gateway, the writes are not
-authenticated - access is LAN / VPN only.
+imported consumption (HAS-318) and the command of the valve (HAS-321); like every service behind
+the gateway, the writes are not authenticated - access is LAN / VPN only.
 
 | Method | Path | Description |
 |---|---|---|
@@ -138,6 +146,7 @@ authenticated - access is LAN / VPN only.
 | `GET` | `/home/water/status/temperature` | The most recent stored reading — `TemperatureReply` with `measuredAt`, `water.temperature` and `circulation.temperature` in °C. `measuredAt` is when the sensor was read — a local date-time of the house, to the second, without an offset. The service repeats its last reading for as long as the sensor is silent, so `measuredAt` is what tells a current reading from an old one. `circulation.pumpActive` is part of the model but is not populated yet, so it is always `false`. Before the first reading is stored the response is empty (`200` with no body). |
 | `GET` | `/home/water/temperature/history?from=&to=` | The stored temperatures over a range, averaged into buckets — see below. |
 | `GET` | `/home/water/valve` | The water valve now — see below. |
+| `POST` | `/home/water/valve?state=open|close&source=` | Close or open the valve — see below. |
 | `GET` | `/home/water/consumption?range=&at=` | The water used by day, week, month or year, with the period before — see below. |
 | `GET`, `PUT` | `/home/water/consumption/imported` | The daily consumption imported from the Shelly cloud — see below. |
 | `GET`, `POST`, `PUT`, `DELETE` | `/home/water/bills`, `/home/water/bills/{id}` | The bills of the waterworks with what the house measured — see below. |
@@ -153,7 +162,8 @@ authenticated - access is LAN / VPN only.
   "pressure": 4.7,
   "temperature": 11.7,
   "counter": {"total": 61.722, "measuredAt": "2026-11-04T21:15:57"},
-  "measuredAt": "2026-11-04T21:15:57"
+  "measuredAt": "2026-11-04T21:15:57",
+  "lastCommandConfirmed": true
 }
 ```
 
@@ -167,6 +177,26 @@ authenticated - access is LAN / VPN only.
   the newest of what is shown at the top, the counter's under `counter`.
 - `503` `REGISTRY_UNAVAILABLE` until the device registry was read once since the start,
   `404` `NOT_FOUND_VALVE` while it has no water valve.
+- `lastCommandConfirmed` - whether the last command was answered by the report of the valve:
+  `false` from its sending until the report arrives and when none did within 60 s; left out until a
+  command was sent since the start.
+
+`POST /home/water/valve?state=close&source=dashboard` sends `Boolean.Set` of `boolean:200` once -
+never repeated - and answers `202` with what was taken:
+
+```json
+{"state": "close", "source": "dashboard", "commandedAt": "2026-11-05T18:05:01"}
+```
+
+- Taken is not done: the command is stored (`water_valve_command`, `V7`) and waits for the report
+  of `boolean:200` in the asked state - by MQTT, or by a read of the valve asked 15 s after the
+  command - within 60 s; `lastCommandConfirmed` tells. The third unconfirmed command in a row is an
+  alert on Discord (once a run, none while the valve is not heard - the offline alarm speaks).
+- `state` is `open` or `close`, `source` a lowercase word of at most 20 letters or dashes
+  (`dashboard`, `rule`); anything else is `400` `INVALID_COMMAND`.
+- `502` `DEVICE_FAILED` when the valve refused the command (its status alone in `details`) or did
+  not answer within 15 s - a command not answered may still have been carried out, so it is stored
+  and waits for its report too; `503` `REGISTRY_UNAVAILABLE` / `404` `NOT_FOUND_VALVE` as above.
 
 ## Consumption
 
@@ -317,7 +347,8 @@ endpoints above do not surface it.
   `measured_at`, `last_checked_at`); the bills (`V4`): `water_bill` (the period, `billed_volume_m3`,
   `meter_reading_m3`, `amount`, `note`, `created_at`, `updated_at`) and `water_consumption_import`
   (`day`, `volume_m3` - the history of the Shelly cloud, kept apart from `water_meter_reading`,
-  whose latest row and deltas go by `id`); the alarms (`V5`): `water_alert` (`kind`, `opened_at`,
+  whose latest row and deltas go by `id`); the commands of the valve (`V7`): `water_valve_command`
+  (`commanded_at`, `state`, `source`, `confirmed_at`); the alarms (`V5`): `water_alert` (`kind`, `opened_at`,
   `last_told_at`, `closed_at`; at most one open a kind), its kinds of the flow alarms added by `V6`.
 - **The valve:** a snapshot every minute of what is fresh - a row of `water_meter_reading` only when
   the counter changed (otherwise `last_checked_at` of the latest row moves), the one row of

@@ -14,7 +14,8 @@ repository map and working rules come from the workspace-level context
 (`organization-repository/claude/organization.md`). The user writes the code in this
 repository themselves; Claude's default role here is analysis, code review and security
 review - the owner had Claude implement the readings of the water valve (HAS-316), the consumption
-(HAS-317), the bills (HAS-318) and the alarms (HAS-319, HAS-320) and reviews them in IntelliJ.
+(HAS-317), the bills (HAS-318), the alarms (HAS-319, HAS-320) and the command of the valve (HAS-321) and reviews them
+in IntelliJ.
 
 ## Role in the system
 
@@ -255,8 +256,30 @@ review - the owner had Claude implement the readings of the water valve (HAS-316
       nothing that pass, it never takes the mains, the silence and frost with it (an unboxing NPE did, before the review).
     - Flows in l/min in the properties, the track and the words (`ValveTracker.litres`); a pass has six notices at most,
       each cut off after 10 s - should they all hang, the pass ends at its bound and the rest is due with the next.
-  - **No command to the valve yet** (`Boolean.Set` of shelly-client is there for the alarms of the epic);
-    `lastCommandConfirmed` of the task comes with the first command.
+  - **The command of the valve** (HAS-321, package `command`, V7 `water_valve_command`) - the one command that cuts the
+    water of the whole house; what is easy to break:
+    - `POST /valve?state=open|close&source=` - `Boolean.Set` of `boolean:200` (`true` opens) through shelly-client,
+      **sent once, never repeated**. **The first command ever sent to a device of the house through shelly-client**: the
+      first real open / close is checked with the owner at the valve (DoD of HAS-321).
+    - **Confirmed by a report, never by the answer of the call** (the rule of HAS-250): `ValveCommands` is a
+      `ValveListener` of `ValveTracker` - every `boolean:200` as it arrives; a report in the asked state, after the
+      sending and within `ValveCommand.WINDOW` (60 s), confirms it (`confirmed_at` stored in the background). The valve
+      is read once `READ_AFTER` (15 s) after the command (`ValveReconciliation.readNow`), so a valve that publishes
+      nothing for a state it was already in is confirmed too. `lastCommandConfirmed` of `GET /valve`: left out until
+      a command since the start, `false` while it waits and when nothing answered, `true` once confirmed.
+    - Nothing within the window: a WARN, the third in a row an alert, once a run (`announced`, ended by a confirmed
+      command), none while the valve is not heard - the offline alarm tells of it.
+    - **A command the valve did not answer may have been carried out**: `DEVICE_FAILED` to the caller, and stored and
+      watched like a taken one; a refused one (a status) is not stored. The row is written after the call and its
+      failure never refuses the command - what the valve did matters more than its log.
+    - **`water.flow.close-on-alarm`** (false - the owner's choice, pinned by `FlowPropertiesTest`): the first alert of a
+      continuous flow or of the empty house closes the valve (`source=rule`, bounded at `AlarmMonitor.RULE_TIMEOUT` 10 s)
+      and says so; an alert sent again keeps its words, its reminders say it was closed and its end that the valve stays
+      closed. An episode read back after a restart (it has an id) closes nothing - its closing was in the pod before. The
+      high flow never closes it (a bath).
+    - `on_power_restore` of the device stays `none` (the owner's setting): after a power cut the state is its first report.
+    - `ValveListener` (was `FlowListener` of HAS-320) - `ValveTracker` takes every bean of it: `FlowTrack` and
+      `ValveCommands`. `ValveRegistry.known` is the refusal of both `GET` and `POST /valve` (static, so a mock answers it).
   - **Rehearsed** (2026-11-04): the released 0.6.1 image applied V1-V2 on a throwaway PostgreSQL with SSL (a user
     with `USAGE, CREATE` on `public` only), the new jar V3 with the real valve and the registry through a
     port-forward, no broker: `/valve` answered the valve within 10 s, a row of the counter a change, the same

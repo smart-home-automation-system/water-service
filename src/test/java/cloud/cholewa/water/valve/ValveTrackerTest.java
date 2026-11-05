@@ -116,7 +116,7 @@ class ValveTrackerTest {
     @Test
     void should_hand_every_flow_rate_to_the_listener_and_tell_it_to_forget() {
         final List<String> heard = new java.util.ArrayList<>();
-        final ValveTracker tracker = new ValveTracker(Clock.fixed(NOW, HOUSE), new FlowListener() {
+        final ValveTracker tracker = new ValveTracker(Clock.fixed(NOW, HOUSE), new ValveListener() {
             @Override
             public void flow(final double litresPerMinute, final LocalDateTime at) {
                 heard.add(litresPerMinute + " at " + at);

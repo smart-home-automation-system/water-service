@@ -41,4 +41,15 @@ public class ValveException extends RuntimeException {
     public static ValveException invalidImport(final String message) {
         return new ValveException(HttpStatus.BAD_REQUEST, WaterError.INVALID_IMPORT, message);
     }
+
+    public static ValveException invalidCommand(final String message) {
+        return new ValveException(HttpStatus.BAD_REQUEST, WaterError.INVALID_COMMAND, message);
+    }
+
+    //status - what the valve answered, null when it did not answer
+    public static ValveException deviceFailed(final Integer status) {
+        return new ValveException(HttpStatus.BAD_GATEWAY, WaterError.DEVICE_FAILED, status == null
+            ? "The water valve did not answer the command"
+            : "The water valve refused the command with " + status);
+    }
 }

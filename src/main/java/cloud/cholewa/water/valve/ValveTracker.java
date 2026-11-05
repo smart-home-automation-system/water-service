@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicReference;
 //state. A message and a read are the valve as it was at their arrival, so the later one wins. Which component is which
 //value is the key of the virtual component of the Neo Smart Water Valve (Shelly X XT1, firmware 2.0.1): boolean:200 the
 //valve, number:200 the flow rate, number:201 the pressure, number:202 the water temperature, object:200 the counter.
-//Every flow rate is also handed to the FlowListener as it arrives (HAS-320, in l/min)
+//Every flow rate (HAS-320, in l/min) and every state of the valve (HAS-321) is also handed to the listeners as it arrives
 @Slf4j
 @Component
 public class ValveTracker {
@@ -41,17 +41,17 @@ public class ValveTracker {
     private static final int LITRES_PER_CUBIC_METRE = 3;
 
     private final Clock clock;
-    private final FlowListener flowListener;
+    private final List<ValveListener> listeners;
     private final AtomicReference<ValveState> latest = new AtomicReference<>(ValveState.UNKNOWN);
 
     @Autowired
-    public ValveTracker(final Clock clock, final FlowListener flowListener) {
+    public ValveTracker(final Clock clock, final List<ValveListener> listeners) {
         this.clock = clock;
-        this.flowListener = flowListener;
+        this.listeners = List.copyOf(listeners);
     }
 
-    public ValveTracker(final Clock clock) {
-        this(clock, FlowListener.NONE);
+    public ValveTracker(final Clock clock, final ValveListener... listeners) {
+        this(clock, List.of(listeners));
     }
 
     public ValveState current() {
@@ -76,7 +76,10 @@ public class ValveTracker {
             default -> current;
         });
         if (status instanceof NumberStatus rate && index == FLOW_RATE && rate.getValue() != null) {
-            flowListener.flow(litres(rate.getValue()), now);
+            listeners.forEach(listener -> listener.flow(litres(rate.getValue()), now));
+        }
+        if (status instanceof BooleanStatus valve && index == STATE && valve.getValue() != null) {
+            listeners.forEach(listener -> listener.state(valve.getValue(), now));
         }
     }
 
@@ -89,7 +92,7 @@ public class ValveTracker {
             ? current.withOnline(true)
             : ValveState.UNKNOWN.withOnline(false));
         if (!online) {
-            flowListener.forget();
+            listeners.forEach(ValveListener::forget);
         }
         if (!Boolean.valueOf(online).equals(before.online())) {
             log.info("The water valve is {} the broker", online ? "back on" : "off");
@@ -99,7 +102,7 @@ public class ValveTracker {
     //another valve in the registry: what was known is of the one before
     public void reset() {
         latest.set(ValveState.UNKNOWN);
-        flowListener.forget();
+        listeners.forEach(ValveListener::forget);
     }
 
     //value.counter.total of the counter, in m3; null when the device left it out. A whole number arrives as an Integer
