@@ -4,14 +4,15 @@ Watches the domestic hot-water circuit. Every three minutes it reads two tempera
 water, circulation) from a Shelly Uni sensor, stores the reading and recomputes one flag:
 does the water need heating? `boiler-service` polls that flag to drive the pumps and the
 furnace. Since HAS-316 it is also the water meter of the house: the Neo Smart Water Valve in the
-garage, from the broker and its RPC, served on `GET /home/water/valve` (epic HAS-310).
+garage, from the broker and its RPC, served on `GET /home/water/valve` (epic HAS-310), and since HAS-317
+the consumption by day, week, month and year on `GET /home/water/consumption`.
 
 Part of the smart-home-automation-system organization — org-wide conventions, the
 repository map and working rules come from the workspace-level context
 (`organization-repository/claude/organization.md`). The user writes the code in this
 repository themselves; Claude's default role here is analysis, code review and security
-review - the owner had Claude implement the readings of the water valve (HAS-316) and reviews them in
-IntelliJ.
+review - the owner had Claude implement the readings of the water valve (HAS-316) and the consumption
+(HAS-317) and reviews them in IntelliJ.
 
 ## Role in the system
 
@@ -161,6 +162,22 @@ IntelliJ.
     `measured_at` moves only with a value (the pressure moves with almost every reading).
   - `MeterRetention` (03:25, bounded at 5 min): `water.meter.retention` (730 days, 366 - 3650, a bare number
     is days), never the latest row.
+  - **The consumption** (HAS-317, `GET /home/water/consumption?range=day|week|month|year&at=`) is read from
+    `water_meter_reading` by one statement per range (`WaterMeterRepository.CONSUMPTION`), the range and the one before
+    it one after the other (`zipWhen`, never two connections of the pool at once). What is easy to break:
+    - **A row is the moment a total was first seen**, so the water of a row is its total less the row before *by id*,
+      counted in the bucket of its `measured_at`; the row before the range is read too (by the index on `measured_at`).
+      **A negative delta is a reset and counts as 0** (`GREATEST`) - pinned with a reset inside a day.
+    - **A bucket has a point only when the counter was watched in it**: a row measured in it, or the row live at its start
+      checked after it began. An hour without water is `0`, an hour the service was down has no point; the water of a gap
+      lands where the counter is seen again. Totals left out when nothing was watched - missing is never 0.
+    - **Cut by `date_trunc`** with the unit of `ConsumptionRange` (`hour`, `day`, `month`): the deltas are summed once and
+      the watch is one index read per bucket. Measured on 438 000 rows (two years at 600 changes a day): a year 0.15 s, a
+      month 13 ms, a day 1 ms - the first form, a join of every bucket with every row, took 0.6 s for a year.
+    - Weeks are Monday to Sunday, the period before is one calendar period earlier; today is the day of the house, read
+      at every call. DST follows the rule of the temperature history (documented, not fixed).
+    - Both parameters are read as text, so a missing or wrong one is `400 INVALID_RANGE` with the code - a typed
+      parameter would be refused by WebFlux without one. The texts for the dashboard come with its water page (HAS-322).
   - **No command to the valve yet** (`Boolean.Set` of shelly-client is there for the alarms of the epic);
     `lastCommandConfirmed` of the task comes with the first command.
   - **Rehearsed** (2026-11-04): the released 0.6.1 image applied V1-V2 on a throwaway PostgreSQL with SSL (a user

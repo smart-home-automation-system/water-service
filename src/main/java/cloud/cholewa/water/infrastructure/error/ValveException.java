@@ -25,4 +25,8 @@ public class ValveException extends RuntimeException {
         return new ValveException(HttpStatus.SERVICE_UNAVAILABLE, WaterError.REGISTRY_UNAVAILABLE,
             "The water valve of the device registry is not known yet");
     }
+
+    public static ValveException invalidRange(final String message) {
+        return new ValveException(HttpStatus.BAD_REQUEST, WaterError.INVALID_RANGE, message);
+    }
 }

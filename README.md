@@ -41,7 +41,8 @@ consumption counter as five virtual components. The service takes them from the 
 the broker (`device.prod.water` on `/device`) and reads them over the RPC of the valve every
 minute, keeps them in memory, stores the counter whenever it changes and serves the valve on
 `GET /home/water/valve`. The valve itself comes from the device registry of `database-service`
-(the kind `water valve`).
+(the kind `water valve`). From the stored counter it answers the consumption by day, week, month
+and year on `GET /home/water/consumption` (HAS-317).
 
 Everything is non-blocking (Spring WebFlux / Reactor): the sensor is read with `WebClient`
 using the models from the shared `shelly-client` (the valve with its RPC client and its MQTT
@@ -89,7 +90,7 @@ the shared `smart-home-sdk`, and errors are rendered through `cholewa-commons`.
 
 # API
 
-Base path `/home/water` (`spring.webflux.base-path`). All three endpoints are read-only.
+Base path `/home/water` (`spring.webflux.base-path`). Every endpoint is read-only.
 
 | Method | Path | Description |
 |---|---|---|
@@ -97,6 +98,7 @@ Base path `/home/water` (`spring.webflux.base-path`). All three endpoints are re
 | `GET` | `/home/water/status/temperature` | The most recent stored reading — `TemperatureReply` with `measuredAt`, `water.temperature` and `circulation.temperature` in °C. `measuredAt` is when the sensor was read — a local date-time of the house, to the second, without an offset. The service repeats its last reading for as long as the sensor is silent, so `measuredAt` is what tells a current reading from an old one. `circulation.pumpActive` is part of the model but is not populated yet, so it is always `false`. Before the first reading is stored the response is empty (`200` with no body). |
 | `GET` | `/home/water/temperature/history?from=&to=` | The stored temperatures over a range, averaged into buckets — see below. |
 | `GET` | `/home/water/valve` | The water valve now — see below. |
+| `GET` | `/home/water/consumption?range=&at=` | The water used by day, week, month or year, with the period before — see below. |
 
 ## The water valve
 
@@ -123,6 +125,40 @@ Base path `/home/water` (`spring.webflux.base-path`). All three endpoints are re
   the newest of what is shown at the top, the counter's under `counter`.
 - `503` `REGISTRY_UNAVAILABLE` until the device registry was read once since the start,
   `404` `NOT_FOUND_VALVE` while it has no water valve.
+
+## Consumption
+
+`GET /home/water/consumption?range=day&at=2026-11-05` (HAS-317) - the water used, from the
+stored readings of the counter:
+
+```json
+{
+  "range": "day",
+  "from": "2026-11-05T00:00:00",
+  "to": "2026-11-06T00:00:00",
+  "unit": "m3",
+  "total": 0.124,
+  "previousTotal": 0.2,
+  "buckets": [{"at": "2026-11-05T07:00:00", "volume": 0.123}]
+}
+```
+
+- `range` `day` (buckets of an hour), `week` (Monday to Sunday) or `month` (buckets of a day),
+  `year` (buckets of a month); `at` any day of the range as `YYYY-MM-DD`, today of the house
+  when left out. `from` / `to` the range in house time, its start included and its end not.
+- `total` the water of the range, `previousTotal` of the same range one period earlier (the
+  day, week, month or year before) - each left out when the counter was not watched in its range.
+- `buckets` one per bucket in which the counter was watched, oldest first: a bucket without
+  water has `0`, a bucket the service did not watch (it was down) has **no point**. Volumes in
+  m³ with three decimals; the total is the sum before rounding.
+- The water of a bucket is the sum of the rises of the counter first seen in it. **A drop of the
+  counter is a reset** (`Service.ResetCounters`, a replaced device) and counts as nothing - never
+  a negative volume. The water of a gap in the readings counts where the counter is seen again.
+- Every date-time is wall-clock time of the house: the hour skipped in spring is a bucket of `0`
+  (the counter was watched across it), the hour repeated in autumn is one bucket with the water of
+  both (the rule of the temperature history).
+- `400` `INVALID_RANGE` for a range that is not one of the four (a missing one included) or a date
+  that is not `YYYY-MM-DD` within the years 2000 - 2999.
 
 ## Temperature history
 

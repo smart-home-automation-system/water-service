@@ -1,5 +1,6 @@
 package cloud.cholewa.water.database.repository;
 
+import cloud.cholewa.water.database.model.ConsumptionBucket;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -34,6 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class WaterMeterRepositoryTest {
 
     private static final LocalDateTime AT = LocalDateTime.of(2026, 11, 4, 19, 51, 20, 123456000);
+    private static final LocalDateTime DAY = LocalDateTime.of(2026, 11, 4, 0, 0);
     private static final TimeZone ZONE_OF_THE_BUILD = TimeZone.getDefault();
 
     @Container
@@ -139,6 +141,99 @@ class WaterMeterRepositoryTest {
 
         readings().map(row -> row.get("total_m3")).as(StepVerifier::create)
             .expectNext(new BigDecimal("3.000000000"))
+            .verifyComplete();
+    }
+
+    //HAS-317: a day in hours - the row before the range gives the first change its predecessor, an hour without water but
+    //watched is 0, an hour nobody watched has no point
+    @Test
+    void should_answer_the_water_of_every_watched_hour() {
+        reading("10", DAY.minusHours(1), DAY.plusHours(6).plusMinutes(10));
+        reading("10.05", DAY.plusHours(6).plusMinutes(11), DAY.plusHours(6).plusMinutes(30));
+        reading("10.2", DAY.plusHours(7).plusMinutes(5), DAY.plusHours(9).plusMinutes(59));
+
+        sut.consumption(DAY, DAY.plusDays(1), "hour").collectList().as(StepVerifier::create)
+            .assertNext(buckets -> {
+                assertThat(buckets).extracting(ConsumptionBucket::at)
+                    .containsExactly(DAY, DAY.plusHours(1), DAY.plusHours(2), DAY.plusHours(3), DAY.plusHours(4),
+                        DAY.plusHours(5), DAY.plusHours(6), DAY.plusHours(7), DAY.plusHours(8), DAY.plusHours(9));
+                assertThat(buckets).extracting(ConsumptionBucket::volume)
+                    .usingElementComparator(BigDecimal::compareTo)
+                    .containsExactly(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                        BigDecimal.ZERO, new BigDecimal("0.05"), new BigDecimal("0.15"), BigDecimal.ZERO, BigDecimal.ZERO);
+            })
+            .verifyComplete();
+    }
+
+    //a reset of the counter inside a day is a new series: the drop counts as nothing, never a negative volume
+    @Test
+    void should_never_answer_a_negative_volume_across_a_reset_of_the_counter() {
+        reading("10", DAY.plusHours(8), DAY.plusHours(8).plusMinutes(30));
+        reading("10.4", DAY.plusHours(8).plusMinutes(31), DAY.plusHours(9));
+        reading("0.001", DAY.plusHours(9).plusMinutes(1), DAY.plusHours(9).plusMinutes(30));
+        reading("0.051", DAY.plusHours(9).plusMinutes(31), DAY.plusHours(9).plusMinutes(59));
+
+        sut.consumption(DAY, DAY.plusDays(1), "hour").collectList().as(StepVerifier::create)
+            .assertNext(buckets -> {
+                assertThat(buckets).extracting(ConsumptionBucket::at).containsExactly(DAY.plusHours(8), DAY.plusHours(9));
+                assertThat(buckets).extracting(ConsumptionBucket::volume)
+                    .usingElementComparator(BigDecimal::compareTo)
+                    .containsExactly(new BigDecimal("0.4"), new BigDecimal("0.05"));
+            })
+            .verifyComplete();
+    }
+
+    @Test
+    void should_leave_out_the_hours_the_counter_was_not_watched() {
+        reading("1", DAY, DAY.plusMinutes(30));
+        reading("1.1", DAY.plusHours(3), DAY.plusHours(3).plusMinutes(30));
+
+        sut.consumption(DAY, DAY.plusDays(1), "hour").map(ConsumptionBucket::at).as(StepVerifier::create)
+            .expectNext(DAY, DAY.plusHours(3))
+            .verifyComplete();
+    }
+
+    //a year in months; the water of a gap is counted where the counter was seen again
+    @Test
+    void should_answer_a_year_in_months() {
+        final LocalDateTime year = LocalDateTime.of(2026, 1, 1, 0, 0);
+        reading("1", year.plusDays(9), LocalDateTime.of(2026, 1, 31, 23, 59));
+        reading("3", LocalDateTime.of(2026, 3, 5, 12, 0), LocalDateTime.of(2026, 3, 6, 12, 0));
+
+        sut.consumption(year, year.plusYears(1), "month").collectList().as(StepVerifier::create)
+            .assertNext(buckets -> {
+                assertThat(buckets).extracting(ConsumptionBucket::at).containsExactly(year, year.plusMonths(2));
+                assertThat(buckets).extracting(ConsumptionBucket::volume)
+                    .usingElementComparator(BigDecimal::compareTo)
+                    .containsExactly(BigDecimal.ZERO, new BigDecimal("2"));
+            })
+            .verifyComplete();
+    }
+
+    //house time without a zone: the hour skipped in spring is a bucket of 0, the counter was watched across it (README)
+    @Test
+    void should_answer_the_hour_skipped_in_spring_as_a_bucket_of_nothing() {
+        final LocalDateTime spring = LocalDateTime.of(2026, 3, 29, 0, 0);
+        reading("5", spring.plusHours(1).plusMinutes(30), spring.plusHours(3).plusMinutes(10));
+
+        sut.consumption(spring.plusHours(1), spring.plusHours(4), "hour").collectList().as(StepVerifier::create)
+            .assertNext(buckets -> assertThat(buckets).extracting(ConsumptionBucket::at)
+                .containsExactly(spring.plusHours(1), spring.plusHours(2), spring.plusHours(3)))
+            .verifyComplete();
+    }
+
+    @Test
+    void should_answer_no_bucket_without_readings() {
+        sut.consumption(DAY, DAY.plusDays(1), "hour").as(StepVerifier::create).verifyComplete();
+    }
+
+    private void reading(final String total, final LocalDateTime measuredAt, final LocalDateTime lastCheckedAt) {
+        databaseClient.sql("INSERT INTO water_meter_reading (total_m3, measured_at, last_checked_at) VALUES (:total, :at, :checked)")
+            .bind("total", new BigDecimal(total))
+            .bind("at", measuredAt)
+            .bind("checked", lastCheckedAt)
+            .then()
+            .as(StepVerifier::create)
             .verifyComplete();
     }
 
