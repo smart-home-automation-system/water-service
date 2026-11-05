@@ -108,8 +108,8 @@ class WaterMeterRepositoryTest {
 
         status().as(StepVerifier::create)
             .assertNext(row -> {
-                assertThat(row.get("measured_at")).isEqualTo(AT);
-                assertThat(row.get("last_checked_at")).isEqualTo(AT.plusMinutes(1));
+                assertThat(row).containsEntry("measured_at", AT);
+                assertThat(row).containsEntry("last_checked_at", AT.plusMinutes(1));
             })
             .verifyComplete();
 
@@ -117,9 +117,9 @@ class WaterMeterRepositoryTest {
 
         status().as(StepVerifier::create)
             .assertNext(row -> {
-                assertThat(row.get("open")).isEqualTo(false);
+                assertThat(row).containsEntry("open", false);
                 assertThat(row.get("flow_rate")).isNull();
-                assertThat(row.get("measured_at")).isEqualTo(AT.plusMinutes(2));
+                assertThat(row).containsEntry("measured_at", AT.plusMinutes(2));
             })
             .verifyComplete();
 

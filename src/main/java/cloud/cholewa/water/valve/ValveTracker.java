@@ -37,10 +37,10 @@ public class ValveTracker {
         "object", Set.of(COUNTER));
 
     private final Clock clock;
-    private final AtomicReference<ValveState> state = new AtomicReference<>(ValveState.UNKNOWN);
+    private final AtomicReference<ValveState> latest = new AtomicReference<>(ValveState.UNKNOWN);
 
     public ValveState current() {
-        return state.get();
+        return latest.get();
     }
 
     static boolean isRead(final String component, final Integer index) {
@@ -50,7 +50,7 @@ public class ValveTracker {
     //the status of one component; one the house does not read, or of a type it does not know, changes nothing
     public void report(final int index, final Object status) {
         final LocalDateTime now = now();
-        state.updateAndGet(current -> switch (status) {
+        latest.updateAndGet(current -> switch (status) {
             case BooleanStatus value when index == STATE -> current.withOpen(new Reported<>(value.getValue(), now));
             case NumberStatus value when index == FLOW_RATE -> current.withFlowRate(new Reported<>(value.getValue(), now));
             case NumberStatus value when index == PRESSURE -> current.withPressure(new Reported<>(value.getValue(), now));
@@ -66,7 +66,7 @@ public class ValveTracker {
     //that left, and GET /valve would serve them as fresh for minutes - the read of every minute brings them back while
     //the valve still answers its RPC
     void online(final boolean online) {
-        final ValveState before = state.getAndUpdate(current -> online
+        final ValveState before = latest.getAndUpdate(current -> online
             ? current.withOnline(true)
             : ValveState.UNKNOWN.withOnline(false));
         if (!Boolean.valueOf(online).equals(before.online())) {
@@ -76,7 +76,7 @@ public class ValveTracker {
 
     //another valve in the registry: what was known is of the one before
     public void reset() {
-        state.set(ValveState.UNKNOWN);
+        latest.set(ValveState.UNKNOWN);
     }
 
     //value.counter.total of the counter, in m3; null when the device left it out. A whole number arrives as an Integer

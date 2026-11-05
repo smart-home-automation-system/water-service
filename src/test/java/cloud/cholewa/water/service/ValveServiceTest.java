@@ -69,7 +69,7 @@ class ValveServiceTest {
             .verifyComplete();
     }
 
-    //a value not reported for five minutes is left out - missing is never off; with nothing fresh the answer is {}
+    //a value not reported for five minutes is left out - missing is never off; with nothing fresh the answer is empty
     @Test
     void should_leave_out_what_is_stale_or_not_known() {
         tracker.report(201, NumberStatus.builder().build());
