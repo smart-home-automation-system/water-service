@@ -2,11 +2,13 @@ package cloud.cholewa.water;
 
 import cloud.cholewa.commons.database.DatabaseProperties;
 import cloud.cholewa.shelly.http.ShellyGen1Client;
+import cloud.cholewa.shelly.codec.ShellyMqttDecoder;
 import cloud.cholewa.shelly.http.ShellyRpcClient;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
+import org.springframework.core.env.Environment;
 import org.springframework.scheduling.annotation.ScheduledAnnotationBeanPostProcessor;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -25,8 +27,9 @@ class WaterServiceApplicationTest {
     void contextLoads() {
     }
 
-    //the pool is this service's share of the 22 connections of the managed database, counted twice
-    //during a rollout; a lost or mistyped key falls back to the library default without a sound
+    //the pool is this service's share of the 47 connections of the managed database (20 allotted to the project, 23
+    //with ristretto), counted twice during a rollout; a lost or mistyped key falls back to the library default without a
+    //sound. The valve (HAS-316) adds two statements a minute and one a night - the share stays 2, the sum unchanged
     @Test
     void should_keep_the_connection_pool_at_its_share_of_the_database_budget() {
         assertThat(databaseProperties.pool().maxSize()).isEqualTo(2);
@@ -46,10 +49,26 @@ class WaterServiceApplicationTest {
             .isEqualTo(10);
     }
 
-    //shelly-client >= 2.0.0 brings clients of its own; this service reads the Shelly Uni through WaterSensorClient
+    //the water valve is read by the RPC client and the MQTT decoder of shelly-client (HAS-316); the Shelly Uni still
+    //through WaterSensorClient
     @Test
-    void should_leave_the_clients_of_shelly_client_out() {
-        assertThat(applicationContext.getBeanNamesForType(ShellyRpcClient.class)).isEmpty();
-        assertThat(applicationContext.getBeanNamesForType(ShellyGen1Client.class)).isEmpty();
+    void should_have_the_clients_of_shelly_client() {
+        assertThat(applicationContext.getBeanNamesForType(ShellyRpcClient.class)).hasSize(1);
+        assertThat(applicationContext.getBeanNamesForType(ShellyGen1Client.class)).hasSize(1);
+        assertThat(applicationContext.getBeanNamesForType(ShellyMqttDecoder.class)).hasSize(1);
+    }
+
+    //the events of every device on /device (HAS-316): the listener returns a Mono, so the ack is manual, and the trace
+    //goes through the broker
+    @Test
+    void should_consume_the_device_events_with_manual_ack_and_observation() {
+        final Environment environment = applicationContext.getEnvironment();
+        assertThat(environment.getProperty("spring.rabbitmq.virtual-host")).isEqualTo("/device");
+        assertThat(environment.getProperty("spring.rabbitmq.username")).isEqualTo("device");
+        assertThat(environment.getProperty("spring.rabbitmq.listener.simple.acknowledge-mode")).isEqualTo("manual");
+        assertThat(environment.getProperty("spring.rabbitmq.listener.simple.prefetch", Integer.class)).isEqualTo(3);
+        assertThat(environment.getProperty("spring.rabbitmq.listener.simple.observation-enabled", Boolean.class)).isTrue();
+        assertThat(environment.getProperty("spring.rabbitmq.template.observation-enabled", Boolean.class)).isTrue();
+        assertThat(environment.getProperty("cholewa.required-properties[0].variable")).isEqualTo("rabbitmq-password");
     }
 }

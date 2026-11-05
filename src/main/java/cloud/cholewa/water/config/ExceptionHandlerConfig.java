@@ -1,7 +1,9 @@
 package cloud.cholewa.water.config;
 
 import cloud.cholewa.commons.error.GlobalErrorExceptionHandler;
+import cloud.cholewa.water.infrastructure.error.ValveException;
 import cloud.cholewa.water.infrastructure.error.WaterException;
+import cloud.cholewa.water.infrastructure.error.processor.ValveExceptionProcessor;
 import cloud.cholewa.water.infrastructure.error.processor.WaterExceptionProcessor;
 import org.springframework.boot.autoconfigure.web.WebProperties;
 import org.springframework.boot.webflux.error.ErrorAttributes;
@@ -30,7 +32,8 @@ public class ExceptionHandlerConfig {
 
         globalErrorExceptionHandler.withCustomErrorProcessor(
             Map.ofEntries(
-                Map.entry(WaterException.class, new WaterExceptionProcessor())
+                Map.entry(WaterException.class, new WaterExceptionProcessor()),
+                Map.entry(ValveException.class, new ValveExceptionProcessor())
             )
         );
 

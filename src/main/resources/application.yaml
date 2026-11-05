@@ -10,6 +10,30 @@ spring:
     # default LIMITED restores ThreadLocals only in "tap" and "handle", so traceId would be
     # missing from the MDC of every log statement inside a reactive chain
     context-propagation: auto
+  rabbitmq:
+    host: rabbitmq-headless
+    port: 5672
+    # the events of every device (HAS-316): the Shelly devices over MQTT and the Eaton devices from amx-service, all
+    # on amq.topic of /device, each queue bound with "#" - the water valve is picked by its device id
+    username: device
+    # no default on purpose: with one the pod would start, turn Ready and consume nothing. Without the variable the
+    # service does not start - cholewa.required-properties sees to that, the binder alone would take the placeholder
+    # for the password
+    password: ${rabbitmq-password}
+    virtual-host: /device
+    connection-timeout: 10s
+    requested-heartbeat: 10s
+    template:
+      # both default to false; without them the trace breaks at the queue
+      observation-enabled: true
+    listener:
+      simple:
+        observation-enabled: true
+        # the listener returns a Mono; with the default AUTO mode the container acks before the message is handled,
+        # so prefetch throttles nothing and the ack is sent twice
+        acknowledge-mode: manual
+        # how many events are in flight at once, the rest waits in the broker - as in energy-service
+        prefetch: 3
   flyway:
     url: ${flyway-url:jdbc:postgresql://${database.host}:${database.port}/${database.name}}
     user: ${database-user:dummyUser}
@@ -29,6 +53,31 @@ database:
     # holds the pool twice and Flyway opens one more connection over JDBC, and with this split
     # even the three rolling services at once fit the budget (HAS-169)
     max-size: 2
+
+rabbitmq:
+  queue:
+    name: device.prod.water
+
+internal:
+  service:
+    # the device registry: the water valve of the house (HAS-311, HAS-316)
+    database: http://database-service:6200
+
+water:
+  # the water valve (HAS-316): a value not reported for stale-after - by MQTT or by the read of every minute - is left out
+  # of GET /valve (a bare number is minutes, 2 - 60)
+  valve:
+    stale-after: PT5M
+  # the readings of the counter of the valve kept for the history; older rows are deleted every night (a bare number is
+  # days)
+  meter:
+    retention: 730d
+
+cholewa:
+  # refuses the start before the first bean when one of these has no value (cholewa-commons >= 1.9.0)
+  required-properties:
+    - property: spring.rabbitmq.password
+      variable: rabbitmq-password
 
 server:
   port: 6200
@@ -64,9 +113,8 @@ logging:
     org.zalando.logbook: trace
 
 shelly:
-  # shelly-client >= 2.0.0 brings its own clients and MQTT decoder; this service keeps WaterSensorClient
-  client:
-    enabled: false
+  # the clients and the MQTT decoder of shelly-client are on since HAS-316 (the water valve); the Shelly Uni of the hot
+  # water is still read by WaterSensorClient
   sensor:
     uni:
       hot-water:
@@ -79,6 +127,16 @@ spring:
   config:
     activate:
       on-profile: local
+  rabbitmq:
+    host: localhost
+
+rabbitmq:
+  queue:
+    name: device.dev.water
+
+internal:
+  service:
+    database: http://localhost:6005
 
 server:
   port: 6006
@@ -100,8 +158,22 @@ spring:
   config:
     activate:
       on-profile: test
+  # a context test starts the listener: the broker is at an address nothing listens on, so that a test cannot reach it
+  # even where the name resolves
+  rabbitmq:
+    host: localhost
+    port: 1
+    password: test
   flyway:
     enabled: false
+
+rabbitmq:
+  queue:
+    name: device.test.water
+
+internal:
+  service:
+    database: http://localhost:1
 
 # second line of defence: SchedulingConfig schedules nothing under this profile, and should anything in a
 # test call the Shelly all the same, it must not reach the device of the house
