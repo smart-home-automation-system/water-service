@@ -74,6 +74,7 @@ class WaterMeterRepositoryTest {
     void forgetTheValve() {
         databaseClient.sql("DELETE FROM water_meter_reading").then().as(StepVerifier::create).verifyComplete();
         databaseClient.sql("DELETE FROM water_valve_status").then().as(StepVerifier::create).verifyComplete();
+        databaseClient.sql("DELETE FROM water_consumption_import").then().as(StepVerifier::create).verifyComplete();
     }
 
     //a row only when the counter changed; the same total moves last_checked_at of the latest row

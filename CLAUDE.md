@@ -5,14 +5,15 @@ water, circulation) from a Shelly Uni sensor, stores the reading and recomputes 
 does the water need heating? `boiler-service` polls that flag to drive the pumps and the
 furnace. Since HAS-316 it is also the water meter of the house: the Neo Smart Water Valve in the
 garage, from the broker and its RPC, served on `GET /home/water/valve` (epic HAS-310), and since HAS-317
-the consumption by day, week, month and year on `GET /home/water/consumption`.
+the consumption by day, week, month and year on `GET /home/water/consumption`; since HAS-318 the bills of
+the waterworks compared with what the house measured, and the daily history imported from the Shelly cloud.
 
 Part of the smart-home-automation-system organization — org-wide conventions, the
 repository map and working rules come from the workspace-level context
 (`organization-repository/claude/organization.md`). The user writes the code in this
 repository themselves; Claude's default role here is analysis, code review and security
-review - the owner had Claude implement the readings of the water valve (HAS-316) and the consumption
-(HAS-317) and reviews them in IntelliJ.
+review - the owner had Claude implement the readings of the water valve (HAS-316), the consumption
+(HAS-317) and the bills (HAS-318) and reviews them in IntelliJ.
 
 ## Role in the system
 
@@ -178,6 +179,30 @@ review - the owner had Claude implement the readings of the water valve (HAS-316
       at every call. DST follows the rule of the temperature history (documented, not fixed).
     - Both parameters are read as text, so a missing or wrong one is `400 INVALID_RANGE` with the code - a typed
       parameter would be refused by WebFlux without one. The texts for the dashboard come with its water page (HAS-322).
+  - **The bills and the imported history** (HAS-318, V4) - what is easy to break:
+    - **The valve keeps no history** (no archive in its RPC, an empty KVS); the Shelly cloud has the daily consumption
+      since about 2026-02 (`GET https://shelly-1-eu.shelly.cloud/v2/statistics/generic/accumulation?id=&channel=3200&date_range=custom&date_from=&date_to=`,
+      undocumented, seen in the Shelly web app; 29.09 - 20.10.2026 is 11 019.7 L against the billed 11 m³). **No
+      integration with the cloud** (owner 2026-11-05): it is imported once by hand through
+      `PUT /home/water/consumption/imported`, which replaces the whole set.
+    - **The import lives in its own table**, `water_consumption_import`, never in `water_meter_reading`: the latest row
+      of the counter and its deltas go by `id`, and rows inserted afterwards with older dates would break both - the
+      snapshot would compare the counter with an old row. **An imported day must not be after the first day of the
+      readings** (`BillRules.checkImport`). That first day is watched only from its first row (2026-11-05 08:37), so its
+      imported value **wins** over the measured part in a bucket of a day or a month (a join with the imported days in
+      `CONSUMPTION` - a `NOT EXISTS` per row took a year to 0.55 s, the join keeps 0.15 s); its hours stay measured. No
+      day is counted twice, none only in part once it is imported.
+    - `GET /consumption` counts an imported day as watched (a bucket of a day, its share of a month); a day in hours has
+      no imported points.
+    - **The measured volume of a bill** is the sum of its days (`consumption(..., "day")`), left out when a day of the
+      period has no bucket - a period before the history, or a day nobody watched. `difference` = measured - billed,
+      `differencePercent` of the billed volume (left out for 0). The bills are measured one after the other
+      (`concatMap`), never two statements of the pool of 2 at once.
+    - **The rules are in `BillRules`, not Bean Validation**, so every refusal carries `INVALID_BILL` / `INVALID_IMPORT`
+      with an English reason (the dashboard copies them); a body that is not JSON or a date that is not one is refused by
+      WebFlux without a code. Overlap is a shared day, both ends included (`WaterBillRepository.findOverlapping`).
+    - The import of a whole set is one transaction (`@Transactional` on `ConsumptionImportRepository.replaceAll`, a
+      delete and one multi-row insert).
   - **No command to the valve yet** (`Boolean.Set` of shelly-client is there for the alarms of the epic);
     `lastCommandConfirmed` of the task comes with the first command.
   - **Rehearsed** (2026-11-04): the released 0.6.1 image applied V1-V2 on a throwaway PostgreSQL with SSL (a user

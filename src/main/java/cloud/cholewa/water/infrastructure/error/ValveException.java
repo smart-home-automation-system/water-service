@@ -29,4 +29,16 @@ public class ValveException extends RuntimeException {
     public static ValveException invalidRange(final String message) {
         return new ValveException(HttpStatus.BAD_REQUEST, WaterError.INVALID_RANGE, message);
     }
+
+    public static ValveException invalidBill(final String message) {
+        return new ValveException(HttpStatus.BAD_REQUEST, WaterError.INVALID_BILL, message);
+    }
+
+    public static ValveException notFoundBill(final long id) {
+        return new ValveException(HttpStatus.NOT_FOUND, WaterError.NOT_FOUND_BILL, "No water bill " + id);
+    }
+
+    public static ValveException invalidImport(final String message) {
+        return new ValveException(HttpStatus.BAD_REQUEST, WaterError.INVALID_IMPORT, message);
+    }
 }

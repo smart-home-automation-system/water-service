@@ -68,7 +68,13 @@ public class WaterMeterRepository {
     //A bucket has a point only when the counter was watched in it: a row was measured in it, or the row live at its start
     //was still checked after it began - so an hour without water is a 0, an hour the service was down has no point. The
     //deltas are summed once by date_trunc and the watch is one index read per bucket: a year of 438 000 rows (600 changes
-    //a day) answered in 0.15 s on a local PostgreSQL, where a join of every bucket with every row took 0.6 s
+    //a day) answered in 0.15 s on a local PostgreSQL, where a join of every bucket with every row took 0.6 s.
+    //An imported day (HAS-318, the history of the Shelly cloud) is a watched day too: its own bucket, or its share of a
+    //month; a day in hours has no imported points - the import is daily. An imported day is never after the first day of
+    //the readings; that first day is watched only from its first row, so an imported value of it wins over what was
+    //measured of it in a bucket of a day or a month - no day is counted twice, none only in part. The measured deltas of an
+    //imported day are left out by a join with the imported days of the range (a NOT EXISTS per row took a year to 0.55 s;
+    //the join keeps it at 0.15 s)
     private static final String CONSUMPTION = """
         WITH series AS (
             SELECT bucket_start
@@ -83,20 +89,32 @@ public class WaterMeterRepository {
         ), deltas AS (
             SELECT measured_at, GREATEST(total_m3 - LAG(total_m3) OVER (ORDER BY id), 0) AS delta
             FROM readings
+        ), imported_days AS (
+            SELECT day, volume_m3 FROM water_consumption_import
+            WHERE CAST(:unit AS text) <> 'hour' AND day >= CAST(:from AS date) AND day < CAST(:to AS date)
         ), volumes AS (
-            SELECT date_trunc(:unit, measured_at) AS bucket_start, SUM(delta) AS volume
+            SELECT date_trunc(:unit, deltas.measured_at) AS bucket_start, SUM(deltas.delta) AS volume
             FROM deltas
-            WHERE measured_at >= :from
+            LEFT JOIN imported_days ON imported_days.day = CAST(deltas.measured_at AS date)
+            WHERE deltas.measured_at >= :from AND imported_days.day IS NULL
+            GROUP BY 1
+        ), measured AS (
+            SELECT series.bucket_start AS at, COALESCE(volumes.volume, 0) AS volume
+            FROM series
+            LEFT JOIN volumes ON volumes.bucket_start = series.bucket_start
+            WHERE volumes.bucket_start IS NOT NULL
+               OR (SELECT live.last_checked_at FROM water_meter_reading live
+                   WHERE live.measured_at < series.bucket_start
+                   ORDER BY live.measured_at DESC, live.id DESC LIMIT 1) >= series.bucket_start
+        ), imported AS (
+            SELECT date_trunc(:unit, CAST(day AS timestamp)) AS at, SUM(volume_m3) AS volume
+            FROM imported_days
             GROUP BY 1
         )
-        SELECT series.bucket_start AS at, COALESCE(volumes.volume, 0) AS volume
-        FROM series
-        LEFT JOIN volumes ON volumes.bucket_start = series.bucket_start
-        WHERE volumes.bucket_start IS NOT NULL
-           OR (SELECT live.last_checked_at FROM water_meter_reading live
-               WHERE live.measured_at < series.bucket_start
-               ORDER BY live.measured_at DESC, live.id DESC LIMIT 1) >= series.bucket_start
-        ORDER BY series.bucket_start
+        SELECT at, SUM(volume) AS volume
+        FROM (SELECT at, volume FROM measured UNION ALL SELECT at, volume FROM imported) AS watched
+        GROUP BY at
+        ORDER BY at
         """;
 
     private final DatabaseClient databaseClient;
