@@ -57,6 +57,14 @@ public class ValveReconciliation {
             () -> Mono.defer(() -> Mono.justOrEmpty(valveRegistry.current())).flatMap(this::read));
     }
 
+    //one read now, outside the schedule - asked after a command of the valve (HAS-321), so that a valve that publishes
+    //nothing for a state it was already in answers it too; bounded as a pass, a failure is the read's own
+    public Mono<Void> readNow() {
+        return Mono.defer(() -> Mono.justOrEmpty(valveRegistry.current()))
+            .flatMap(this::read)
+            .timeout(LIMIT, Mono.empty());
+    }
+
     private Mono<Void> read(final WaterValve valve) {
         return shellyRpcClient.dynamicComponents(valve.address())
             .doOnNext(this::report)

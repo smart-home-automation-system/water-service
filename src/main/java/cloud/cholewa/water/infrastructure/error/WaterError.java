@@ -27,7 +27,15 @@ public enum WaterError implements ErrorId {
     NOT_FOUND_BILL("Water bill not found"),
 
     //an import of the daily consumption the API refuses - its reason in details (HAS-318)
-    INVALID_IMPORT("Invalid consumption import");
+    INVALID_IMPORT("Invalid consumption import"),
+
+    //a command of the valve the API refuses - a state that is not open or close, or a source that is not a short word
+    //(HAS-321)
+    INVALID_COMMAND("Invalid valve command"),
+
+    //the valve refused the command or did not answer it; only its status, if it answered, goes past the first hop
+    //(HAS-321)
+    DEVICE_FAILED("Water valve failed");
 
     private final String description;
 }

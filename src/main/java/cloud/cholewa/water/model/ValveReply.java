@@ -12,7 +12,10 @@ import java.time.LocalDateTime;
  * {@code pressure} - bar, two decimals (the device reports kPa).<br>
  * {@code temperature} - the water, °C.<br>
  * {@code counter} - the consumption counter of the valve.<br>
- * {@code measuredAt} - the newest report of what is shown, on the clock of the house, without an offset, to the second.
+ * {@code measuredAt} - the newest report of what is shown, on the clock of the house, without an offset, to the second.<br>
+ * {@code lastCommandConfirmed} - the last command of the valve answered by its report (HAS-321): {@code false} from its
+ * sending until the report arrives and when none did within 60 s; left out until a command was sent since the start of
+ * the service.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ValveReply(
@@ -21,6 +24,7 @@ public record ValveReply(
     Double pressure,
     Double temperature,
     CounterReply counter,
-    LocalDateTime measuredAt
+    LocalDateTime measuredAt,
+    Boolean lastCommandConfirmed
 ) {
 }

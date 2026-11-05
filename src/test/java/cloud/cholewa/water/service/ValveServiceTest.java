@@ -3,6 +3,9 @@ package cloud.cholewa.water.service;
 import cloud.cholewa.shelly.model.BooleanStatus;
 import cloud.cholewa.shelly.model.NumberStatus;
 import cloud.cholewa.shelly.model.ObjectStatus;
+import cloud.cholewa.water.command.ValveCommand;
+import cloud.cholewa.water.command.ValveCommands;
+import cloud.cholewa.water.database.repository.WaterValveCommandRepository;
 import cloud.cholewa.water.infrastructure.error.ValveException;
 import cloud.cholewa.water.infrastructure.error.WaterError;
 import cloud.cholewa.water.model.CounterReply;
@@ -35,7 +38,8 @@ class ValveServiceTest {
     private static final LocalDateTime REPORTED_AT = LocalDateTime.of(2026, 11, 4, 19, 51, 20);
 
     private final ValveRegistry valveRegistry = mock(ValveRegistry.class);
-    private final ValveTracker tracker = new ValveTracker(Clock.fixed(REPORTED, HOUSE));
+    private final ValveCommands commands = new ValveCommands(mock(WaterValveCommandRepository.class));
+    private final ValveTracker tracker = new ValveTracker(Clock.fixed(REPORTED, HOUSE), commands);
 
     @BeforeEach
     void registerTheValve() {
@@ -52,7 +56,7 @@ class ValveServiceTest {
         tracker.report(200, ObjectStatus.builder().value(Map.of("counter", Map.of("total", 61.66584306))).build());
 
         service(REPORTED.plusSeconds(60)).current().as(StepVerifier::create)
-            .expectNext(new ValveReply("open", 12.0, 4.95, 12.9, new CounterReply(61.666, REPORTED_AT), REPORTED_AT))
+            .expectNext(new ValveReply("open", 12.0, 4.95, 12.9, new CounterReply(61.666, REPORTED_AT), REPORTED_AT, null))
             .verifyComplete();
     }
 
@@ -76,10 +80,26 @@ class ValveServiceTest {
         tracker.report(202, NumberStatus.builder().value(12.9).build());
 
         service(REPORTED.plusSeconds(300)).current().as(StepVerifier::create)
-            .expectNext(new ValveReply(null, null, null, 12.9, null, REPORTED_AT))
+            .expectNext(new ValveReply(null, null, null, 12.9, null, REPORTED_AT, null))
             .verifyComplete();
         service(REPORTED.plusSeconds(301)).current().as(StepVerifier::create)
-            .expectNext(new ValveReply(null, null, null, null, null, null))
+            .expectNext(new ValveReply(null, null, null, null, null, null, null))
+            .verifyComplete();
+    }
+
+    //the last command: left out before one was sent, false while it waits (HAS-321)
+    @Test
+    void should_tell_whether_the_last_command_was_confirmed() {
+        tracker.report(200, BooleanStatus.builder().value(true).build());
+
+        service(REPORTED).current().as(StepVerifier::create)
+            .assertNext(reply -> assertThat(reply.lastCommandConfirmed()).isNull())
+            .verifyComplete();
+
+        commands.issued(new ValveCommand(null, false, "dashboard", REPORTED_AT));
+
+        service(REPORTED).current().as(StepVerifier::create)
+            .assertNext(reply -> assertThat(reply.lastCommandConfirmed()).isFalse())
             .verifyComplete();
     }
 
@@ -104,6 +124,7 @@ class ValveServiceTest {
     }
 
     private ValveService service(final Instant now) {
-        return new ValveService(valveRegistry, tracker, new ValveProperties(Duration.ofMinutes(5)), Clock.fixed(now, HOUSE));
+        return new ValveService(valveRegistry, tracker, commands, new ValveProperties(Duration.ofMinutes(5)),
+            Clock.fixed(now, HOUSE));
     }
 }

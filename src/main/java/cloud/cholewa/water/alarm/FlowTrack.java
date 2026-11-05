@@ -1,6 +1,6 @@
 package cloud.cholewa.water.alarm;
 
-import cloud.cholewa.water.valve.FlowListener;
+import cloud.cholewa.water.valve.ValveListener;
 import cloud.cholewa.water.valve.ValveProperties;
 import org.springframework.stereotype.Component;
 
@@ -20,7 +20,7 @@ import java.util.concurrent.atomic.AtomicReference;
 //such a silence and the last will stop every run at the last report, so a flow before a silence and one after it are
 //never added up, and an episode of the flow before closes where it was last heard
 @Component
-public class FlowTrack implements FlowListener {
+public class FlowTrack implements ValveListener {
 
     private static final Duration PASS = Duration.ofMinutes(1);
 

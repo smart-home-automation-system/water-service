@@ -2,8 +2,10 @@ package cloud.cholewa.water.alarm;
 
 import cloud.cholewa.commons.notification.NotificationPublisher;
 import cloud.cholewa.commons.scheduling.ScheduledPass;
+import cloud.cholewa.water.command.ValveCommandService;
 import cloud.cholewa.water.database.model.WaterAlertEntity;
 import cloud.cholewa.water.database.repository.WaterAlertRepository;
+import cloud.cholewa.water.infrastructure.error.ValveException;
 import cloud.cholewa.water.presence.HouseOccupancy;
 import cloud.cholewa.water.presence.PresenceClient;
 import cloud.cholewa.water.registry.ValveRegistry;
@@ -25,6 +27,8 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
@@ -39,7 +43,10 @@ import java.util.stream.Stream;
 //After a start nothing is decided before the open episodes are read from the database (tried again with every pass): a
 //restart neither repeats an alert nor forgets a return. A notification neither fails nor stalls the pass: each is cut
 //off after NOTICE_TIMEOUT and its failure logged with its text; what it would have changed waits for the next pass. The
-//device and the broker go down together, so an alert that never got through is said by the return
+//device and the broker go down together, so an alert that never got through is said by the return.
+//With water.flow.close-on-alarm (off by default, HAS-321) the first alert of a continuous flow or of the empty house
+//closes the valve first (source rule) and says so; an alert sent again keeps what its first said, the valve is never
+//commanded twice for one episode. The high flow never closes it
 @Slf4j
 @Component
 public class AlarmMonitor {
@@ -55,6 +62,7 @@ public class AlarmMonitor {
     private final ValveTracker valveTracker;
     private final FlowTrack flowTrack;
     private final PresenceClient presenceClient;
+    private final ValveCommandService valveCommandService;
     private final WaterAlertRepository waterAlertRepository;
     private final NotificationPublisher notificationPublisher;
     private final AlarmProperties alarmProperties;
@@ -63,12 +71,19 @@ public class AlarmMonitor {
     private final Clock clock;
     private final AtomicReference<AlarmWatch> watch;
     private final AtomicReference<House> house = new AtomicReference<>(House.UNKNOWN);
+    //what the closing of the valve said, by the episode whose alert asked it
+    private final Map<String, String> closings = new ConcurrentHashMap<>();
+    private static final Set<Alarm> CLOSING = Set.of(Alarm.CONTINUOUS_FLOW, Alarm.EMPTY_HOUSE_FLOW);
+    private static final String CLOSED = " The valve was told to close.";
+    //below the bound of a command of the API: the rule shares the bound of the pass with its notices
+    static final Duration RULE_TIMEOUT = Duration.ofSeconds(10);
 
     public AlarmMonitor(
         final ValveRegistry valveRegistry,
         final ValveTracker valveTracker,
         final FlowTrack flowTrack,
         final PresenceClient presenceClient,
+        final ValveCommandService valveCommandService,
         final WaterAlertRepository waterAlertRepository,
         final NotificationPublisher notificationPublisher,
         final AlarmProperties alarmProperties,
@@ -80,6 +95,7 @@ public class AlarmMonitor {
         this.valveTracker = valveTracker;
         this.flowTrack = flowTrack;
         this.presenceClient = presenceClient;
+        this.valveCommandService = valveCommandService;
         this.waterAlertRepository = waterAlertRepository;
         this.notificationPublisher = notificationPublisher;
         this.alarmProperties = alarmProperties;
@@ -138,7 +154,7 @@ public class AlarmMonitor {
                 final AlarmRules.Decision flow = flow(valve, fresh, known, now);
                 watch.set(flow.next());
                 return Flux.fromStream(Stream.concat(valve.notices().stream(), flow.notices().stream()))
-                    .concatMap(this::send)
+                    .concatMap(notice -> closing(notice).flatMap(this::send))
                     .then(Mono.defer(this::store));
             }));
     }
@@ -200,6 +216,46 @@ public class AlarmMonitor {
         return Optional.ofNullable(reported).map(Reported::value).orElse(null);
     }
 
+    //the alert of a continuous flow or of the empty house closes the valve first when the owner wants it, and says so;
+    //its reminders and its end say the valve was closed by the rule
+    private Mono<AlarmRules.Notice> closing(final AlarmRules.Notice notice) {
+        return Mono.just(notice)
+            .filter(flowNotice -> CLOSING.contains(flowNotice.alarm()))
+            .flatMap(this::closingWords)
+            .map(words -> new AlarmRules.Notice(notice.type(), notice.alarm(), notice.text() + words, notice.row()))
+            .defaultIfEmpty(notice);
+    }
+
+    private Mono<String> closingWords(final AlarmRules.Notice notice) {
+        final String episode = episodeOf(notice.row());
+        final Mono<String> told = Mono.justOrEmpty(closings.get(episode)).filter(CLOSED::equals);
+        return switch (notice.type()) {
+            case ALERT -> Mono.just(notice)
+                .filter(alert -> flowProperties.closeOnAlarm())
+                .flatMap(alert -> Mono.justOrEmpty(closings.get(episode))
+                    //an episode stored before this start had its first alert, and its closing, in the pod before
+                    .switchIfEmpty(Mono.just(alert).filter(first -> first.row().id() == null).flatMap(first -> close(episode))));
+            case REMINDER -> told;
+            case INFO -> told.map(words -> " The valve stays closed until it is opened.");
+        };
+    }
+
+    private Mono<String> close(final String episode) {
+        return valveCommandService.command("close", "rule")
+            .timeout(RULE_TIMEOUT)
+            .map(reply -> CLOSED)
+            .onErrorResume(failure -> Mono.fromSupplier(() -> {
+                log.error("The water valve was not closed by the rule: {}", failure.toString());
+                return " The valve could not be closed: " + (failure instanceof ValveException refusal
+                    ? refusal.getMessage() : "it did not take the command") + ".";
+            }))
+            .doOnNext(words -> closings.put(episode, words));
+    }
+
+    private static String episodeOf(final WaterAlertEntity row) {
+        return row.kind() + "@" + row.openedAt();
+    }
+
     //published, then what the notice changes is held - a notice that failed changes nothing and is due again
     private Mono<Void> send(final AlarmRules.Notice notice) {
         final Mono<Void> publish = switch (notice.type()) {
@@ -212,6 +268,9 @@ public class AlarmMonitor {
             .then(Mono.fromRunnable(() -> {
                 log.info("Water alarm notification published: {}", notice.text());
                 watch.updateAndGet(held -> held.with(notice.alarm(), notice.row()));
+                if (notice.type() == AlarmRules.Type.INFO) {
+                    closings.remove(episodeOf(notice.row()));
+                }
             }))
             .then()
             .onErrorResume(failure -> Mono.fromRunnable(() -> log.error(

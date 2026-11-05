@@ -1,6 +1,6 @@
 package cloud.cholewa.water.service;
 
-import cloud.cholewa.water.infrastructure.error.ValveException;
+import cloud.cholewa.water.command.ValveCommands;
 import cloud.cholewa.water.model.CounterReply;
 import cloud.cholewa.water.model.ValveReply;
 import cloud.cholewa.water.registry.ValveRegistry;
@@ -21,7 +21,8 @@ import java.time.temporal.ChronoUnit;
 //The water valve now, from memory (HAS-316): REGISTRY_UNAVAILABLE until the registry was read once, NOT_FOUND_VALVE while
 //it has no valve, otherwise the fresh values in the units of the house - l/min, bar, m3. A value not reported within
 //water.valve.stale-after is left out; with nothing fresh the answer is {} - no reading. The conversions are a decimal
-//shift and a rounding of BigDecimal, not a multiplication of doubles (0.012 * 1000 is 12.000000000000002)
+//shift and a rounding of BigDecimal, not a multiplication of doubles (0.012 * 1000 is 12.000000000000002). Whether the
+//last command was confirmed comes with it (HAS-321)
 @Service
 @RequiredArgsConstructor
 public class ValveService {
@@ -31,26 +32,25 @@ public class ValveService {
 
     private final ValveRegistry valveRegistry;
     private final ValveTracker valveTracker;
+    private final ValveCommands valveCommands;
     private final ValveProperties valveProperties;
     private final Clock clock;
 
     public Mono<ValveReply> current() {
-        return Mono.fromSupplier(valveRegistry::isKnown)
-            .filter(Boolean.TRUE::equals)
-            .switchIfEmpty(Mono.error(ValveException::registryUnavailable))
-            .flatMap(known -> Mono.justOrEmpty(valveRegistry.current()))
-            .switchIfEmpty(Mono.error(ValveException::notFound))
-            .map(valve -> replyOf(valveTracker.current().freshOnly(LocalDateTime.now(clock), valveProperties.staleAfter())));
+        return ValveRegistry.known(valveRegistry)
+            .map(valve -> replyOf(valveTracker.current().freshOnly(LocalDateTime.now(clock), valveProperties.staleAfter()),
+                valveCommands.lastConfirmed()));
     }
 
-    static ValveReply replyOf(final ValveState state) {
+    static ValveReply replyOf(final ValveState state, final Boolean lastCommandConfirmed) {
         return new ValveReply(
             state.open() == null ? null : stateOf(state.open().value()),
             state.flowRate() == null ? null : shifted(state.flowRate().value(), LITRES_PER_M3, 1),
             state.pressure() == null ? null : shifted(state.pressure().value(), -KPA_PER_BAR, 2),
             state.temperature() == null ? null : shifted(state.temperature().value(), 0, 1),
             state.counterTotal() == null ? null : counterOf(state.counterTotal()),
-            state.newestReport().map(ValveService::toSecond).orElse(null));
+            state.newestReport().map(ValveService::toSecond).orElse(null),
+            lastCommandConfirmed);
     }
 
     private static String stateOf(final boolean open) {

@@ -15,7 +15,7 @@ class FlowTrackTest {
     private static final LocalDateTime T0 = LocalDateTime.of(2026, 11, 5, 10, 0);
     private static final Duration PAUSE = Duration.ofMinutes(1);
     private static final FlowProperties FLOW = new FlowProperties(25.0, Duration.ofMinutes(3), PAUSE,
-        Duration.ofMinutes(30), 0.5, Duration.ofMinutes(2));
+        Duration.ofMinutes(30), 0.5, Duration.ofMinutes(2), false);
 
     private final FlowTrack sut = new FlowTrack(FLOW, new ValveProperties(Duration.ofMinutes(5)));
 

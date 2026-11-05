@@ -3,8 +3,11 @@ package cloud.cholewa.water.alarm;
 import cloud.cholewa.commons.notification.NotificationPublisher;
 import cloud.cholewa.shelly.model.NumberStatus;
 import cloud.cholewa.shelly.model.ObjectStatus;
+import cloud.cholewa.water.command.ValveCommandService;
 import cloud.cholewa.water.database.model.WaterAlertEntity;
 import cloud.cholewa.water.database.repository.WaterAlertRepository;
+import cloud.cholewa.water.infrastructure.error.ValveException;
+import cloud.cholewa.water.model.ValveCommandReply;
 import cloud.cholewa.water.presence.PresenceClient;
 import cloud.cholewa.water.presence.ResidentPresence;
 import cloud.cholewa.water.registry.ValveRegistry;
@@ -48,7 +51,9 @@ class AlarmMonitorTest {
     private static final AlarmProperties PROPERTIES = new AlarmProperties(100.0, Duration.ofMinutes(5),
         Duration.ofMinutes(5), 3.0, Duration.ofMinutes(5), Duration.ofHours(1));
     private static final FlowProperties FLOW = new FlowProperties(25.0, Duration.ofMinutes(3), Duration.ofMinutes(1),
-        Duration.ofMinutes(30), 0.5, Duration.ofMinutes(2));
+        Duration.ofMinutes(30), 0.5, Duration.ofMinutes(2), false);
+    private static final FlowProperties CLOSING = new FlowProperties(25.0, Duration.ofMinutes(3), Duration.ofMinutes(1),
+        Duration.ofMinutes(30), 0.5, Duration.ofMinutes(2), true);
     private static final ValveProperties VALVE = new ValveProperties(Duration.ofMinutes(5));
 
     private final AtomicReference<Instant> now = new AtomicReference<>(START);
@@ -72,6 +77,7 @@ class AlarmMonitorTest {
     private final FlowTrack flowTrack = new FlowTrack(FLOW, VALVE);
     private final ValveTracker tracker = new ValveTracker(clock, flowTrack);
     private final PresenceClient presenceClient = mock(PresenceClient.class);
+    private final ValveCommandService commandService = mock(ValveCommandService.class);
     private final WaterAlertRepository repository = mock(WaterAlertRepository.class);
     private final NotificationPublisher publisher = mock(NotificationPublisher.class);
     private AlarmMonitor sut;
@@ -86,8 +92,85 @@ class AlarmMonitorTest {
         when(publisher.publishInfo(anyString())).thenReturn(Mono.empty());
         when(presenceClient.residents()).thenAnswer(call -> Mono.just(List.of(
             new ResidentPresence("Alex", true, T0.minusDays(1), LocalDateTime.now(clock)))));
-        sut = new AlarmMonitor(registry, tracker, flowTrack, presenceClient, repository, publisher, PROPERTIES, FLOW,
-            VALVE, clock);
+        sut = monitor(FLOW);
+    }
+
+    private AlarmMonitor monitor(final FlowProperties flow) {
+        return new AlarmMonitor(registry, tracker, flowTrack, presenceClient, commandService, repository, publisher,
+            PROPERTIES, flow, VALVE, clock);
+    }
+
+    //close-on-alarm (HAS-321): the first alert of a continuous flow closes the valve and says so - once an episode,
+    //an alert sent again keeps its words and commands nothing
+    @Test
+    void should_close_the_valve_at_the_alert_of_a_continuous_flow_when_asked() {
+        sut = monitor(CLOSING);
+        when(commandService.command("close", "rule")).thenReturn(Mono.just(new ValveCommandReply("close", "rule", T0)));
+        when(publisher.publishAlert(anyString()))
+            .thenReturn(Mono.error(new IllegalStateException("broker down")))
+            .thenReturn(Mono.empty());
+
+        passesWithFlow(0.002, 0, 31);
+
+        verify(commandService, times(1)).command("close", "rule");
+        verify(publisher).publishAlert("Continuous water flow: running without a pause since 10:00 (30 min), "
+            + "2 l/min now. The valve was told to close.");
+        verify(publisher).publishAlert("Continuous water flow: running without a pause since 10:00 (31 min), "
+            + "2 l/min now. The valve was told to close.");
+    }
+
+    //the end of an episode the rule closed says the valve stays closed
+    @Test
+    void should_say_the_valve_stays_closed_when_the_flow_it_stopped_ends() {
+        sut = monitor(CLOSING);
+        when(commandService.command("close", "rule")).thenReturn(Mono.just(new ValveCommandReply("close", "rule", T0)));
+
+        passesWithFlow(0.002, 0, 30);
+        passesWithFlow(0.0, 31, 33);
+
+        verify(publisher).publishInfo("Continuous water flow over: it ran from 10:00 to 10:31 (31 min), at most "
+            + "2 l/min. The valve stays closed until it is opened.");
+    }
+
+    //an episode read back after a restart had its first alert - and its closing - in the pod before
+    @Test
+    void should_not_close_the_valve_again_for_an_episode_of_before_a_restart() {
+        sut = monitor(CLOSING);
+        when(repository.findByClosedAtIsNull())
+            .thenReturn(Flux.just(new WaterAlertEntity(3L, "continuous flow", T0, null, null)));
+
+        passesWithFlow(0.002, 0, 2);
+
+        verify(publisher).publishAlert(anyString());
+        verify(commandService, never()).command(anyString(), anyString());
+    }
+
+    //a valve that did not take the command: the alert says why
+    @Test
+    void should_say_when_the_valve_could_not_be_closed() {
+        sut = monitor(CLOSING);
+        when(commandService.command("close", "rule")).thenReturn(Mono.error(ValveException.deviceFailed(null)));
+        when(presenceClient.residents()).thenAnswer(call -> Mono.just(List.of(
+            new ResidentPresence("Alex", false, T0.minusHours(1), LocalDateTime.now(clock)))));
+
+        passesWithFlow(0.004, 0, 2);
+
+        verify(publisher).publishAlert("Water running while nobody is at home: 4 l/min since 10:00 (2 min), "
+            + "the house empty since 10:00. The valve could not be closed: The water valve did not answer the command.");
+    }
+
+    //a high flow never closes the valve - a bath; and close-on-alarm off (the default) closes nothing
+    @Test
+    void should_never_close_the_valve_for_a_high_flow_or_while_close_on_alarm_is_off() {
+        sut = monitor(CLOSING);
+        passesWithFlow(0.03, 0, 3);
+        verify(publisher).publishAlert(anyString());
+
+        sut = monitor(FLOW);
+        flowTrack.forget();
+        passesWithFlow(0.002, 10, 41);
+
+        verify(commandService, never()).command(anyString(), anyString());
     }
 
     //water running in a house empty for two minutes: the alert, with the flow the valve reports

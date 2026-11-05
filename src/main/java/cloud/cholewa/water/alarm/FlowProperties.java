@@ -22,6 +22,8 @@ import java.time.temporal.ChronoUnit;
 //continuousAfter - a flow above zero for this long is a continuous flow (PT30M; 5 min - 24 h)
 //emptyHouseAbove - a flow above it while nobody is at home - against the noise of the sensor (0.5; 0.1 - 10)
 //emptyHouseAfter - the house empty for this long before such a flow is an alarm (PT2M; 1 min - 24 h)
+//closeOnAlarm - the continuous flow and the empty house close the valve at their alert (false - the choice of the owner,
+//  HAS-321); the high flow never does - a bath
 @Validated
 @ConfigurationProperties(prefix = "water.flow")
 public record FlowProperties(
@@ -30,6 +32,7 @@ public record FlowProperties(
     @NotNull @DurationUnit(ChronoUnit.MINUTES) @DurationMin(minutes = 1) @DurationMax(minutes = 30) Duration continuousPause,
     @NotNull @DurationUnit(ChronoUnit.MINUTES) @DurationMin(minutes = 5) @DurationMax(hours = 24) Duration continuousAfter,
     @NotNull @DecimalMin("0.1") @DecimalMax("10") Double emptyHouseAbove,
-    @NotNull @DurationUnit(ChronoUnit.MINUTES) @DurationMin(minutes = 1) @DurationMax(hours = 24) Duration emptyHouseAfter
+    @NotNull @DurationUnit(ChronoUnit.MINUTES) @DurationMin(minutes = 1) @DurationMax(hours = 24) Duration emptyHouseAfter,
+    @NotNull Boolean closeOnAlarm
 ) {
 }
