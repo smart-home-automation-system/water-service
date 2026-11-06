@@ -243,7 +243,7 @@ class CirculationServiceTest {
 
         verify(gen1, never()).relay(anyString(), anyInt(), anyBoolean());
         verify(repository, times(1)).end(any(), any(), any(), any());
-        verify(repository).end(eq(9L), eq(AT.plusSeconds(30)), eq("device"), eq(null));
+        verify(repository).end(9L, AT.plusSeconds(30), "device", null);
     }
 
     //an off that fails leaves the timer of the device to stop the pump: the run ends as failure
