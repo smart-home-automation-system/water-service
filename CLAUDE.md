@@ -8,7 +8,8 @@ garage, from the broker and its RPC, served on `GET /home/water/valve` (epic HAS
 the consumption by day, week, month and year on `GET /home/water/consumption`; since HAS-318 the bills of
 the waterworks compared with what the house measured, and the daily history imported from the Shelly cloud; since HAS-319
 the alarms of the mains, the valve and frost, and since HAS-320 those of the flow - high, continuous, in an empty house; since
-HAS-404 the circulation pump of the hot water (relay 1 of the Shelly Uni): its state and a manual start.
+HAS-404 the circulation pump of the hot water (relay 1 of the Shelly Uni): its state and a manual start, and since HAS-405 its
+automation (the motion and the lights of the bathrooms, comfort windows).
 
 Part of the smart-home-automation-system organization — org-wide conventions, the
 repository map and working rules come from the workspace-level context
@@ -16,7 +17,7 @@ repository map and working rules come from the workspace-level context
 repository themselves; Claude's default role here is analysis, code review and security
 review - the owner had Claude implement the readings of the water valve (HAS-316), the consumption
 (HAS-317), the bills (HAS-318), the alarms (HAS-319, HAS-320), the command of the valve (HAS-321) and the circulation pump
-(HAS-404) and reviews them
+(HAS-404, HAS-405) and reviews them
 in IntelliJ.
 
 ## Role in the system
@@ -28,7 +29,9 @@ in IntelliJ.
 - Calls: the Shelly Uni sensor on the LAN over HTTP, the water valve over its RPC
   (`Shelly.GetComponents`, HAS-316), `database-service` for the valve of the device registry
   (`GET /home/device/registry?kind=water valve&enabled=true`), `presence-service` for whether anybody is
-  at home (`GET /home/presence/residents/presence` over k8s DNS, every minute - HAS-320), and PostgreSQL.
+  at home (`GET /home/presence/residents/presence` over k8s DNS, every minute - HAS-320; and when a trigger of the
+  circulation comes - HAS-405), `light-service` for the bathrooms (`GET /home/light/rooms/{room}` over k8s DNS, every
+  10 s - HAS-405), and PostgreSQL.
 - Consumes: `device.prod.water` on `/device` (user `device`, `rabbitmq-password`) - every device
   event, of which only the valve is read (HAS-316).
 - Publishes: the alarms of the valve to the `notification` exchange of `/notification` (user `notification`,
@@ -304,9 +307,31 @@ in IntelliJ.
     - **A run an earlier pod left open** is ended as `failure` at the end of its timer at the first pass that manages it
       (`closeOrphans`, the run this pod holds kept by its start).
     - `DEVICE_FAILED` is shared with the valve, its description "Device failed" since HAS-404 (the valve's `details` say
-      which). The trigger is `manual` today; `motion`, `light`, `window` come with the automation (HAS-405), and so do
-      the conditions of an automatic run. Until then the scene of the Shelly cloud still switches the pump - a pump on
-      without a run of ours is `running` without a trigger.
+      which). A pump on without a run of ours (the scene of the Shelly cloud before HAS-405, a hand in the Shelly app) is
+      `running` without a trigger.
+  - **The automation of the circulation** (HAS-405, `CirculationAutomation`, `AutomationRules`, `RoomTriggers`,
+    `RiseWatch`, package `light`) - what is easy to break:
+    - **`CirculationAutomation`** (fixedDelay 10 s, bounded at 45 s): the rooms of `water.circulation.automation.rooms`
+      from light-service one after the other (`LightClient`, a client like `PresenceClient`, cut off after 5 s); the first
+      trigger of a pass - else the first pass of a minute of a comfort window - is judged and may start a run through
+      `CirculationService.startAutomatic` (the manual start with its trigger and source: the room, or the window as
+      `19:00-23:30`). Nothing is read while `automation.enabled` is false.
+    - **`RoomTriggers`** (no I/O): the first read of a room after a start triggers nothing; a motion newer than the last
+      seen is `motion`, a light from `false` to `true` is `light` (`null` before is no switch); a read without
+      `lastMotionAt` keeps the last one seen - a restart of light-service never makes an old motion new.
+    - **`AutomationRules`** (no I/O), in this order, cheap first: the quiet hours, a run going on, the Uni read within
+      `STALE_AFTER` with the pump off, the tank at `tank-min`, the return below `start-below`; then the pause (one
+      statement, `findLastSuccessfulEnd` - by id, a run stopped by the temperature or the limit; a failed read is no
+      pause); then presence-service (`HouseOccupancy.judge`, OCCUPIED only - unknown never starts). Why not is a DEBUG
+      line, a start an INFO, a refused start (the start reads the Uni again) a WARN.
+    - **`RiseWatch`** (owner 2026-11-06, instead of "three runs stopped by the limit" of the task: the return rarely
+      reaches 35 °C within 3 min with the tank at about 43 °C - the first real run went 31.1 -> 33.7 °C): every end of a
+      run (`CirculationService.end`, once) with the reason `temperature` or `limit` and both temperatures; `no-rise-runs`
+      in a row below `min-rise` are one alert, the next that rises one info. In memory - a restart counts anew; the state
+      moves only once the notice was published (cut off after 30 s, never failing the end of the run). Through the
+      `NotificationPublisher` of the alarms.
+    - The takeover: the scene "CONTROL WATER CIRCULATION" of the Shelly cloud is disabled (not removed) by the owner at the
+      deploy of 0.14.0 - with both on, the pump would run twice as often.
   - **Rehearsed** (2026-11-04): the released 0.6.1 image applied V1-V2 on a throwaway PostgreSQL with SSL (a user
     with `USAGE, CREATE` on `public` only), the new jar V3 with the real valve and the registry through a
     port-forward, no broker: `/valve` answered the valve within 10 s, a row of the counter a change, the same

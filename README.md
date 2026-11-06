@@ -87,10 +87,10 @@ report says.
 
 It also drives the **circulation pump of the hot water** (HAS-404, epic HAS-403) - relay 1
 "CIRCULATION" of the same Shelly Uni: the state of the pump and a manual start, a run stopped once
-the return reaches its target or after a time limit. The automation (motion and light in a
-bathroom, comfort windows) comes with HAS-405; until then the scene "CONTROL WATER CIRCULATION" of
-the Shelly cloud still switches the pump on motion, and the service shows those runs as a pump on
-without a trigger.
+the return reaches its target or after a time limit; and since HAS-405 the automation - a run on a
+new motion or a light switched on in a bathroom (read from `light-service`) and in the comfort
+windows, while somebody is at home, the tank is warm and the return cold. It takes over from the
+scene "CONTROL WATER CIRCULATION" of the Shelly cloud, disabled at its deploy.
 
 Everything is non-blocking (Spring WebFlux / Reactor): the sensor is read with `WebClient`
 using the models from the shared `shelly-client` (the valve with its RPC client and its MQTT
@@ -135,7 +135,10 @@ the shared `smart-home-sdk`, and errors are rendered through `cholewa-commons`.
 - The device registry: `internal.service.database` (`http://localhost:6005` in `local` - a
   port-forward to `database-service`); whether anybody is at home: `internal.service.presence`
   (`http://localhost:6009` in `local`, a port-forward to `presence-service` - not reached, the house
-  is not known and no alarm of the empty house is raised).
+  is not known and no alarm of the empty house is raised); the motion and the lights of the bathrooms:
+  `internal.service.light` (`http://localhost:6012` in `local`, a port-forward to `light-service` -
+  not reached, the automation of the circulation triggers nothing but its comfort windows, and those
+  start nothing while the house is not known).
 - The sensor address comes from `shelly.sensor.uni.hot-water.host` / `.port`. When the sensor
   is unreachable the scheduled poll logs the error and skips the cycle — the service keeps
   running, it simply stores no new reading, so `status/temperature` keeps returning the last
@@ -361,6 +364,43 @@ temperature history (local date-times, at most 31 days, `400` without a code oth
 | `water.circulation.max-run` | `PT3M` | the longest run, also the timer of the device (30 s - 10 min, a bare number is minutes) |
 | `water.circulation.tank-min` | `38` | °C of the tank below which a start is refused (20 - 80) |
 | `water.circulation.stop-on-return` | `true` | whether the return stops a run - `false` leaves the limit alone, for a sensor that is not on the return |
+
+### The automation
+
+Since HAS-405 the pump is also started by itself, **before the tap is opened** - never on the flow
+of the valve, the water then runs already. Triggers:
+
+- **a new motion** in a room of `rooms` - `occupancy.lastMotionAt` of `GET /home/light/rooms/{room}` of
+  `light-service` newer than the last one seen (read every 10 s, over k8s DNS; the bathroom down has no
+  motion sensor) - trigger `motion`, source the room;
+- **a light switched on** in such a room (`anyOn` from `false` to `true`) - trigger `light`;
+- **every minute of a comfort window** - trigger `window`, source the window (`19:00-23:30`).
+
+The first read of a room after a start is what was there already and triggers nothing. A trigger
+starts a run only when all of these hold - the cheap ones first, presence-service last:
+
+- outside the quiet hours (23:30 - 05:30) and with no run going on and the pump off (the Uni read
+  within the minute - unknown never starts);
+- the tank at least `tank-min` and the return below `start-below` (30 °C);
+- `pause-after` (20 min) since the end of the last run stopped by the temperature or the limit;
+- somebody at home (`presence-service`; not known is never at home).
+
+The run is the start of the manual one (the Uni read again, the tank checked again) with its
+trigger and source in `circulation_run`. Three runs in a row whose return rose by less than
+`min-rise` (1.5 °C) - stopped by the temperature or the limit, both temperatures known - are an
+**alert** on the technical channel (a pump or a sensor to look at), the next run that rises an
+info; judged by the rise, not by the limit (owner, 2026-11-06: with the tank at about 43 °C the
+return rarely reaches 35 °C within a run). The count is in memory.
+
+| Property | Default | Meaning |
+|---|---|---|
+| `water.circulation.automation.enabled` | `true` | `false` switches the automation off without a release; the manual start stays |
+| `water.circulation.automation.rooms` | `bathroom up`, `bathroom down` | the rooms of `light-service` whose motion and lights start a run (1 - 10) |
+| `water.circulation.automation.start-below` | `30` | °C of the return below which an automatic run starts (15 - 60) |
+| `water.circulation.automation.pause-after` | `PT20M` | no automatic run within it after a run stopped by the temperature or the limit (0 - 2 h, a bare number is minutes) |
+| `water.circulation.automation.quiet-from` / `quiet-to` | `23:30` / `05:30` | no automatic run between them, across midnight |
+| `water.circulation.automation.comfort-windows` | `06:00-08:00`, `19:00-23:30` | a run every minute of a window while the conditions hold (at most 6) |
+| `water.circulation.automation.min-rise` / `no-rise-runs` | `1.5` / `3` | the alert of a return that does not warm (0.5 - 10 °C, 2 - 10 runs) |
 
 ## Temperature history
 

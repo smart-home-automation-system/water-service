@@ -37,6 +37,13 @@ public interface CirculationRunRepository extends ReactiveCrudRepository<Circula
     //the newest run - by id, never started_at: a house time goes back an hour in October
     Mono<CirculationRunEntity> findFirstByOrderByIdDesc();
 
+    //the end of the newest run stopped by the temperature or the limit - the pause of the automation (HAS-405); by id,
+    //for the same reason
+    @Query("""
+        SELECT ended_at FROM circulation_run WHERE stopped_by IN ('temperature', 'limit') AND ended_at IS NOT NULL
+        ORDER BY id DESC LIMIT 1""")
+    Mono<LocalDateTime> findLastSuccessfulEnd();
+
     @Modifying
     @Query("DELETE FROM circulation_run WHERE started_at < :before")
     Mono<Integer> deleteStartedBefore(LocalDateTime before);

@@ -34,7 +34,8 @@ import java.util.regex.Pattern;
 //no second command; two starts at once share one (starting). A command the Uni did not answer may have been carried out:
 //the run is held and watched all the same, the caller gets the 502 (the rule of the valve, HAS-321). The row of a run is
 //written after the command, and its failure never refuses the start. The monitor ends a run (stop): the relay switched
-//off when it is still on, then the row - one end only, the first
+//off when it is still on, then the row - one end only, the first. An automatic start (HAS-405) is the same start with its
+//trigger and source; the conditions of it are the automation's. The end of every run is judged by RiseWatch
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -58,6 +59,7 @@ public class CirculationService {
     private final CirculationPump pump;
     private final CirculationRunRepository repository;
     private final CirculationProperties properties;
+    private final RiseWatch riseWatch;
     private final Clock clock;
 
     private final AtomicReference<Mono<CirculationRun>> starting = new AtomicReference<>();
@@ -68,19 +70,30 @@ public class CirculationService {
             .filter(SOURCE.asMatchPredicate())
             .switchIfEmpty(Mono.error(() -> ValveException.invalidCommand(
                 "The source is a lowercase word of at most 20 letters or dashes, not " + source)))
-            .flatMap(valid -> Mono.justOrEmpty(pump.run()).switchIfEmpty(Mono.defer(() -> startOnce(valid))))
+            .flatMap(valid -> Mono.justOrEmpty(pump.run()).switchIfEmpty(Mono.defer(() -> startOnce(MANUAL, valid))))
             .map(CirculationService::replyOf);
     }
 
+    //an automatic start (HAS-405): trigger motion, light or window, source the room or the window; a run going on is
+    //answered as it is. Refusals are those of a manual start (TANK_COLD, DEVICE_FAILED) - the automation logs them
+    Mono<CirculationRun> startAutomatic(final String trigger, final String source) {
+        return Mono.justOrEmpty(pump.run()).switchIfEmpty(Mono.defer(() -> startOnce(trigger, source)));
+    }
+
+    //the end of the newest run stopped by the temperature or the limit; empty for none
+    Mono<LocalDateTime> lastSuccessfulEnd() {
+        return repository.findLastSuccessfulEnd().timeout(STORE_TIMEOUT);
+    }
+
     //a second start while one is under way gets the same one: never two commands, never two runs
-    private Mono<CirculationRun> startOnce(final String source) {
-        final Mono<CirculationRun> fresh = Mono.defer(() -> begin(source))
+    private Mono<CirculationRun> startOnce(final String trigger, final String source) {
+        final Mono<CirculationRun> fresh = Mono.defer(() -> begin(trigger, source))
             .doFinally(signal -> starting.set(null))
             .cache();
         return Optional.ofNullable(starting.compareAndExchange(null, fresh)).orElse(fresh);
     }
 
-    private Mono<CirculationRun> begin(final String source) {
+    private Mono<CirculationRun> begin(final String trigger, final String source) {
         return Mono.fromSupplier(this::now)
             .flatMap(askedAt -> waterSensorClient.status()
                 .timeout(READ_TIMEOUT)
@@ -96,16 +109,16 @@ public class CirculationService {
             .flatMap(reading -> Mono.just(reading)
                 .filter(warm -> warm.tank() >= properties.tankMin())
                 .switchIfEmpty(Mono.error(() -> ValveException.tankCold(reading.tank(), properties.tankMin()))))
-            .flatMap(reading -> send(reading, source));
+            .flatMap(reading -> send(reading, trigger, source));
     }
 
-    private Mono<CirculationRun> send(final UniReading reading, final String source) {
+    private Mono<CirculationRun> send(final UniReading reading, final String trigger, final String source) {
         final int timer = (int) properties.maxRun().toSeconds();
-        return Mono.fromSupplier(() -> new CirculationRun(null, now(), MANUAL, source, reading.returnTemperature(), true))
+        return Mono.fromSupplier(() -> new CirculationRun(null, now(), trigger, source, reading.returnTemperature(), true))
             .flatMap(run -> shellyGen1Client.relay(waterSensorConfig.address(), UniReading.PUMP_RELAY, true, timer)
                 .timeout(COMMAND_TIMEOUT)
-                .doOnSubscribe(subscription -> log.info("The circulation pump is started by {} for {} s at most, the "
-                    + "tank at {} C, the return at {} C", source, timer, reading.tank(), reading.returnTemperature()))
+                .doOnSubscribe(subscription -> log.info("The circulation pump is started ({}, {}) for {} s at most, the "
+                    + "tank at {} C, the return at {} C", trigger, source, timer, reading.tank(), reading.returnTemperature()))
                 .then(Mono.defer(() -> started(run)))
                 .onErrorResume(failure -> failed(run, failure)));
     }
@@ -165,9 +178,16 @@ public class CirculationService {
                            final LocalDateTime endedAt) {
         return Mono.fromSupplier(() -> pump.ended(run))
             .filter(Boolean::booleanValue)
-            .doOnNext(ended -> log.info("The run of the circulation pump started at {} by {} ended: {}, the return at {} C",
-                run.startedAt(), run.source(), reason, returnNow))
-            .flatMap(ended -> Mono.justOrEmpty(run.id()))
+            .doOnNext(ended -> log.info("The run of the circulation pump started at {} ({}, {}) ended: {}, the return at {} C",
+                run.startedAt(), run.trigger(), run.source(), reason, returnNow))
+            .flatMap(ended -> store(run, reason, returnNow, endedAt)
+                .then(riseWatch.ended(reason, run.returnAtStart(), returnNow)))
+            .then();
+    }
+
+    private Mono<Void> store(final CirculationRun run, final String reason, final Double returnNow,
+                             final LocalDateTime endedAt) {
+        return Mono.justOrEmpty(run.id())
             .flatMap(id -> repository.end(id, endedAt, reason, decimal(returnNow))
                 .timeout(STORE_TIMEOUT)
                 .onErrorResume(failure -> Mono.fromRunnable(() -> log.warn(

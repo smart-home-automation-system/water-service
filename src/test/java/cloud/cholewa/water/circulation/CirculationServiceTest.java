@@ -62,6 +62,7 @@ class CirculationServiceTest {
     private final ShellyGen1Client gen1 = mock(ShellyGen1Client.class);
     private final CirculationRunRepository repository = mock(CirculationRunRepository.class);
     private final CirculationPump pump = new CirculationPump();
+    private final RiseWatch riseWatch = mock(RiseWatch.class);
     private CirculationService sut;
 
     static ShellyUniStatusResponse status(final boolean pumpOn, final Double tank, final Double returnTemperature) {
@@ -84,8 +85,52 @@ class CirculationServiceTest {
         });
         when(repository.end(any(), any(), any(), any())).thenReturn(Mono.just(1));
         when(repository.findFirstByOrderByIdDesc()).thenReturn(Mono.empty());
+        when(riseWatch.ended(any(), any(), any())).thenReturn(Mono.empty());
         sut = new CirculationService(client, new WaterSensorConfig("192.0.2.47", 80), gen1, pump, repository,
-            new CirculationProperties(35.0, Duration.ofMinutes(3), 38.0, true), new MovingClock(clock));
+            new CirculationProperties(35.0, Duration.ofMinutes(3), 38.0, true), riseWatch, new MovingClock(clock));
+    }
+
+    //HAS-405: the same start with the trigger and the source of the automation
+    @Test
+    void should_start_an_automatic_run_with_its_trigger_and_source() {
+        sut.startAutomatic("motion", "bathroom up").as(StepVerifier::create)
+            .expectNext(new CirculationRun(9L, AT, "motion", "bathroom up", 24.5, true))
+            .verifyComplete();
+
+        verify(gen1).relay(UNI, 1, true, 180);
+        verify(repository).save(new CirculationRunEntity(null, AT, null, "motion", "bathroom up", null,
+            new BigDecimal("24.50"), null));
+    }
+
+    @Test
+    void should_answer_an_automatic_start_with_the_run_going_on() {
+        sut.start("dashboard").as(StepVerifier::create).expectNextCount(1).verifyComplete();
+
+        sut.startAutomatic("light", "bathroom down").as(StepVerifier::create)
+            .expectNext(new CirculationRun(9L, AT, "manual", "dashboard", 24.5, true))
+            .verifyComplete();
+
+        verify(gen1, times(1)).relay(anyString(), anyInt(), anyBoolean(), any());
+    }
+
+    //the end of a run is judged by the watch of the rise - once, with both temperatures
+    @Test
+    void should_hand_the_end_of_a_run_to_the_watch_of_the_rise() {
+        sut.start("dashboard").as(StepVerifier::create).expectNextCount(1).verifyComplete();
+        final CirculationRun run = pump.run().orElseThrow();
+
+        sut.stop(run, new Stop("limit", true), 26.0, AT.plusMinutes(3))
+            .then(sut.stop(run, new Stop("limit", true), 26.0, AT.plusMinutes(3)))
+            .as(StepVerifier::create).verifyComplete();
+
+        verify(riseWatch, times(1)).ended("limit", 24.5, 26.0);
+    }
+
+    @Test
+    void should_read_the_end_of_the_last_successful_run() {
+        when(repository.findLastSuccessfulEnd()).thenReturn(Mono.just(AT.minusMinutes(5)));
+
+        sut.lastSuccessfulEnd().as(StepVerifier::create).expectNext(AT.minusMinutes(5)).verifyComplete();
     }
 
     @Test

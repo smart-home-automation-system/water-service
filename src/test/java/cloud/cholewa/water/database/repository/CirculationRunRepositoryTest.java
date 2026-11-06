@@ -143,6 +143,26 @@ class CirculationRunRepositoryTest {
             .expectNext("temperature").verifyComplete();
     }
 
+    //the pause of the automation (HAS-405): the end of the newest run stopped by the temperature or the limit, by id -
+    //a run ended by the device, a failure or not ended at all is no successful run
+    @Test
+    void should_answer_the_end_of_the_newest_successful_run() {
+        runs.findLastSuccessfulEnd().as(StepVerifier::create).verifyComplete();
+
+        final Long limit = runs.save(started(AT.minusHours(2))).map(CirculationRunEntity::id).block();
+        final Long warm = runs.save(started(AT.minusHours(1))).map(CirculationRunEntity::id).block();
+        final Long device = runs.save(started(AT.minusMinutes(30))).map(CirculationRunEntity::id).block();
+        runs.save(started(AT)).as(StepVerifier::create).expectNextCount(1).verifyComplete();
+        runs.end(limit, AT.minusHours(2).plusMinutes(3), "limit", null)
+            .then(runs.end(warm, AT.minusHours(1).plusMinutes(2), "temperature", null))
+            .then(runs.end(device, AT.minusMinutes(29), "device", null))
+            .as(StepVerifier::create).expectNext(1).verifyComplete();
+
+        runs.findLastSuccessfulEnd().as(StepVerifier::create)
+            .expectNext(AT.minusHours(1).plusMinutes(2))
+            .verifyComplete();
+    }
+
     @Test
     void should_delete_the_runs_started_before_a_time() {
         runs.save(started(AT.minusDays(366))).then(runs.save(started(AT.minusDays(364)))).as(StepVerifier::create)
