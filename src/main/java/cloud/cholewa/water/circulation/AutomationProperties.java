@@ -20,19 +20,24 @@ import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 
-//The automation of the circulation pump (HAS-405); temperatures in degrees C, a bare duration is minutes - without the
-//unit it would bind as milliseconds. Pinned by AutomationPropertiesTest.
-//enabled - the automation runs (true); false leaves the manual start alone, without a release
-//rooms - the rooms of light-service whose motion and lights start a run (the two bathrooms; 1 - 10)
-//startBelow - an automatic run only while the return is below it (30; 15 - 60) - a warm loop needs no run
-//pauseAfter - no automatic run within it after the end of a run stopped by the temperature or the limit (PT20M; 0 - 2 h)
-//quietFrom, quietTo - no automatic run between them; across midnight when from is after to (23:30 - 05:30); equal ends
-//  are refused - they would be the whole day
-//comfortWindows - a run every minute of a window while the conditions hold (06:00 - 08:00, 19:00 - 23:30; at most 6;
-//  equal ends refused)
-//minRise, noRiseRuns - an alert when noRiseRuns runs in a row raised the return by less than minRise (1.5; 0.5 - 10 and
-//  3; 2 - 10), a pump or a sensor to look at (owner 2026-11-06: by the rise, not by the limit - the return rarely reaches
-//  its target within a run, the tank being about 43 C)
+/**
+ * The automation of the circulation pump (HAS-405); temperatures in degrees C, a bare duration is minutes - without the
+ * unit it would bind as milliseconds. Pinned by AutomationPropertiesTest.
+ * <ul>
+ *   <li>enabled - the automation runs (true); false leaves the manual start alone, without a release;</li>
+ *   <li>rooms - the rooms of light-service whose motion and lights start a run (the two bathrooms; 1 - 10);</li>
+ *   <li>startBelow - an automatic run only while the return is below it (30; 15 - 60) - a warm loop needs no run;</li>
+ *   <li>pauseAfter - no automatic run within it after the end of a run stopped by the temperature or the limit
+ *   (PT20M; 0 - 2 h);</li>
+ *   <li>quietFrom, quietTo - no automatic run between them; across midnight when from is after to (23:30 - 05:30);
+ *   equal ends are refused - they would be the whole day;</li>
+ *   <li>comfortWindows - a run every minute of a window while the conditions hold (06:00 - 08:00, 19:00 - 23:30; at
+ *   most 6; equal ends refused);</li>
+ *   <li>minRise, noRiseRuns - an alert when noRiseRuns runs in a row raised the return by less than minRise (1.5;
+ *   0.5 - 10 and 3; 2 - 10), a pump or a sensor to look at (owner 2026-11-06: by the rise, not by the limit - the return
+ *   rarely reaches its target within a run, the tank being about 43 C).</li>
+ * </ul>
+ */
 @Validated
 @ConfigurationProperties(prefix = "water.circulation.automation")
 public record AutomationProperties(
