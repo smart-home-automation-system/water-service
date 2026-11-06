@@ -19,6 +19,18 @@ public class WaterSensorClient {
     private final WaterSensorConfig waterSensorConfig;
     private final WebClient shellyWebClient;
 
+    //The status of the Uni for the circulation pump (HAS-404), read every 15 s: nothing logged here - the monitor tells a
+    //silence once - and an answer without wifi_sta is not the Uni ({} would decode into a relay and sensors of nothing)
+    public Mono<ShellyUniStatusResponse> status() {
+        return shellyWebClient
+            .get()
+            .uri(uriBuilder -> waterSensorConfig.getUriBuilder(uriBuilder).build())
+            .retrieve()
+            .bodyToMono(ShellyUniStatusResponse.class)
+            .filter(status -> status.getWifiSta() != null)
+            .switchIfEmpty(Mono.error(() -> new WaterException("The Shelly Uni answered something that is not its status")));
+    }
+
     public Mono<ShellyUniStatusResponse> getTemperatures() {
         return shellyWebClient
             .get()

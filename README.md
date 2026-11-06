@@ -85,6 +85,13 @@ episode says the valve stays closed; a high flow never closes it (a bath). The v
 `on_power_restore` at `none` (the owner's setting): after a power cut its state is what its first
 report says.
 
+It also drives the **circulation pump of the hot water** (HAS-404, epic HAS-403) - relay 1
+"CIRCULATION" of the same Shelly Uni: the state of the pump and a manual start, a run stopped once
+the return reaches its target or after a time limit. The automation (motion and light in a
+bathroom, comfort windows) comes with HAS-405; until then the scene "CONTROL WATER CIRCULATION" of
+the Shelly cloud still switches the pump on motion, and the service shows those runs as a pump on
+without a trigger.
+
 Everything is non-blocking (Spring WebFlux / Reactor): the sensor is read with `WebClient`
 using the models from the shared `shelly-client` (the valve with its RPC client and its MQTT
 decoder), PostgreSQL is accessed over **R2DBC**
@@ -150,6 +157,9 @@ the gateway, the writes are not authenticated - access is LAN / VPN only.
 | `GET` | `/home/water/consumption?range=&at=` | The water used by day, week, month or year, with the period before — see below. |
 | `GET`, `PUT` | `/home/water/consumption/imported` | The daily consumption imported from the Shelly cloud — see below. |
 | `GET`, `POST`, `PUT`, `DELETE` | `/home/water/bills`, `/home/water/bills/{id}` | The bills of the waterworks with what the house measured — see below. |
+| `GET` | `/home/water/circulation` | The circulation pump now — see below. |
+| `POST` | `/home/water/circulation?source=` | Start a run of the circulation pump — see below. |
+| `GET` | `/home/water/circulation/runs?from=&to=` | The runs the service started — see below. |
 
 ## The water valve
 
@@ -194,7 +204,8 @@ never repeated - and answers `202` with what was taken:
   alert on Discord (once a run, none while the valve is not heard - the offline alarm speaks).
 - `state` is `open` or `close`, `source` a lowercase word of at most 20 letters or dashes
   (`dashboard`, `rule`); anything else is `400` `INVALID_COMMAND`.
-- `502` `DEVICE_FAILED` when the valve refused the command (its status alone in `details`) or did
+- `502` `DEVICE_FAILED` (message "Device failed" - shared with the circulation pump since HAS-404;
+  it read "Water valve failed" before) when the valve refused the command (its status alone in `details`) or did
   not answer within 15 s - a command not answered may still have been carried out, so it is stored
   and waits for its report too; `503` `REGISTRY_UNAVAILABLE` / `404` `NOT_FOUND_VALVE` as above.
 
@@ -290,6 +301,67 @@ measured over its period:
   `periodFrom` or in the future, a negative volume or amount, too many decimals, a period that
   shares a day with another bill; `404` `NOT_FOUND_BILL`.
 
+## The circulation pump
+
+Relay 1 "CIRCULATION" of the Shelly Uni of the hot water (HAS-404), switched through
+`shelly-client` 2.6.0. The relay has `auto_off` of 60 s on the device; a start sends
+`/relay/1?turn=on&timer=<max-run>`, whose timer replaces it for that switch and flips the relay back
+should the service never stop it.
+
+`GET /home/water/circulation` - the newest read of the Uni (every 15 s, every 5 s while a run goes
+on), a field left out when it is not known - never off, never 0; the read is left out when older
+than a minute:
+
+```json
+{
+  "running": true,
+  "since": "2026-11-05T19:00:00",
+  "trigger": "manual",
+  "source": "dashboard",
+  "returnTemperature": 28.5,
+  "tankTemperature": 45.0,
+  "measuredAt": "2026-11-05T19:00:05",
+  "lastRun": {"startedAt": "2026-11-05T19:00:00", "trigger": "manual", "source": "dashboard", "returnAtStart": 24.50}
+}
+```
+
+- `running` - the relay is on; `since` - since when; `trigger` and `source` - of the run the service
+  started, left out for a pump switched on by something else (the scene of the Shelly cloud).
+- `returnTemperature` - sensor 1 of the Uni, `tankTemperature` - sensor 0, in °C.
+- `lastRun` - the newest run the service started, the one going on included (`endedAt` and
+  `stoppedBy` left out while it goes on).
+
+`POST /home/water/circulation?source=dashboard` - `202` with the run (as `lastRun`): started is not
+warm, the read tells when the return got there.
+
+- The Uni is read first: the tank below `water.circulation.tank-min` (38 °C) is `409` `TANK_COLD`;
+  a Uni not read, or read without the tank, `502` `DEVICE_FAILED`.
+- A run already going on is answered as it is - no second command; two starts at once share one.
+- The command is sent once: refused by the Uni, `502` `DEVICE_FAILED` and nothing held; not
+  answered, `502` all the same, but the run is held and watched - it may have been carried out.
+- `source` is a lowercase word of at most 20 letters or dashes; anything else is `400`
+  `INVALID_COMMAND`.
+
+A run ends when the return reaches `water.circulation.return-target` (35 °C, with
+`stop-on-return`) or after `max-run` (3 min) - the relay is switched off; when the relay is found
+off before that (`device` - a hand in the Shelly app, a power cut; `limit` near max-run - the timer
+of the device; `failure` for a start the Uni did not answer); and as `failure` when the Uni is not
+heard for a minute past max-run, or when the off command fails (the timer stops the pump). A run an
+earlier pod left open (a deploy during a run) is ended as `failure` at the end of its timer at the
+first pass of the next.
+
+`GET /home/water/circulation/runs?from=&to=` - the runs started in `[from, to)`, newest first, each as
+`lastRun`: `startedAt`, `endedAt`, `trigger`, `source`, `stoppedBy` (`temperature`, `limit`,
+`device`, `failure`), `returnAtStart`, `returnAtEnd`. The range follows the rules of the
+temperature history (local date-times, at most 31 days, `400` without a code otherwise).
+
+| Property | Default | Meaning |
+|---|---|---|
+| `water.circulation.return-target` | `35` | °C of the return that stops a run (20 - 60) |
+| `water.circulation.max-run` | `PT3M` | the longest run, also the timer of the device (30 s - 10 min, a bare number is minutes) |
+| `water.circulation.tank-min` | `38` | °C of the tank below which a start is refused (20 - 80) |
+| `water.circulation.stop-on-return` | `true` | whether the return stops a run - `false` leaves the limit alone, for a sensor that is not on the return |
+
 ## Temperature history
 
 `GET /home/water/temperature/history?from=2026-10-08T00:00:00&to=2026-10-09T00:00:00`
@@ -348,7 +420,9 @@ endpoints above do not surface it.
   `meter_reading_m3`, `amount`, `note`, `created_at`, `updated_at`) and `water_consumption_import`
   (`day`, `volume_m3` - the history of the Shelly cloud, kept apart from `water_meter_reading`,
   whose latest row and deltas go by `id`); the commands of the valve (`V7`): `water_valve_command`
-  (`commanded_at`, `state`, `source`, `confirmed_at`); the alarms (`V5`): `water_alert` (`kind`, `opened_at`,
+  (`commanded_at`, `state`, `source`, `confirmed_at`); the runs of the circulation pump (`V8`):
+  `circulation_run` (`started_at`, `ended_at`, `trigger`, `source`, `stopped_by`, `return_at_start`,
+  `return_at_end`), kept 365 days - deleted every night at 03:35; the alarms (`V5`): `water_alert` (`kind`, `opened_at`,
   `last_told_at`, `closed_at`; at most one open a kind), its kinds of the flow alarms added by `V6`.
 - **The valve:** a snapshot every minute of what is fresh - a row of `water_meter_reading` only when
   the counter changed (otherwise `last_checked_at` of the latest row moves), the one row of

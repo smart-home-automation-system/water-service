@@ -11,7 +11,7 @@ import java.util.Optional;
 //The rules of the range a history is asked for - the ones of the temperature history of
 //heating-service (HAS-199), which took them from the reports of presence-service - and the width
 //of the buckets it is answered in.
-final class HistoryRange {
+public final class HistoryRange {
 
     static final long MAX_DAYS = 31;
 
@@ -35,7 +35,7 @@ final class HistoryRange {
     }
 
     //what is wrong with the range, as the 400 to answer - empty for a valid one
-    static Optional<ResponseStatusException> violation(final LocalDateTime from, final LocalDateTime to) {
+    public static Optional<ResponseStatusException> violation(final LocalDateTime from, final LocalDateTime to) {
         if (isOutsideTheCalendar(from) || isOutsideTheCalendar(to)) {
             return Optional.of(new ResponseStatusException(
                 HttpStatus.BAD_REQUEST,

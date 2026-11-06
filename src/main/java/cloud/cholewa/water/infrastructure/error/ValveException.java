@@ -46,6 +46,24 @@ public class ValveException extends RuntimeException {
         return new ValveException(HttpStatus.BAD_REQUEST, WaterError.INVALID_COMMAND, message);
     }
 
+    //status - what the Uni answered, null when it did not answer (HAS-404)
+    public static ValveException pumpFailed(final Integer status) {
+        return new ValveException(HttpStatus.BAD_GATEWAY, WaterError.DEVICE_FAILED, status == null
+            ? "The circulation pump did not answer the command"
+            : "The circulation pump refused the command with " + status);
+    }
+
+    //the Uni was not read before a start, or read without the temperature of the tank (HAS-404)
+    public static ValveException pumpUnread() {
+        return new ValveException(HttpStatus.BAD_GATEWAY, WaterError.DEVICE_FAILED,
+            "The Shelly Uni of the hot water was not read, or without the temperature of the tank");
+    }
+
+    public static ValveException tankCold(final double tank, final double tankMin) {
+        return new ValveException(HttpStatus.CONFLICT, WaterError.TANK_COLD,
+            "The tank is at " + tank + " C, below " + tankMin + " C");
+    }
+
     //status - what the valve answered, null when it did not answer
     public static ValveException deviceFailed(final Integer status) {
         return new ValveException(HttpStatus.BAD_GATEWAY, WaterError.DEVICE_FAILED, status == null
