@@ -62,8 +62,10 @@ internal:
   service:
     # the device registry: the water valve of the house (HAS-311, HAS-316)
     database: http://database-service:6200
-    # whether anybody is at home, for the flow of the empty house (HAS-320)
+    # whether anybody is at home, for the flow of the empty house (HAS-320) and the circulation (HAS-405)
     presence: http://presence-service:6200
+    # the motion and the lights of the bathrooms, for the circulation (HAS-405)
+    light: http://light-service:6200
 
 water:
   # the water valve (HAS-316): a value not reported for stale-after - by MQTT or by the read of every minute - is left out
@@ -105,6 +107,27 @@ water:
     max-run: PT3M
     tank-min: 38
     stop-on-return: true
+    # the automation (HAS-405): a run on a new motion or a light switched on in a bathroom of rooms (light-service, read
+    # every 10 s), and every minute of a comfort window - only while somebody is at home, the tank at tank-min, the return
+    # below start-below, pause-after since the last run that ended by the temperature or the limit, and outside the quiet
+    # hours (a bare number of pause-after is minutes). enabled: false leaves the manual start alone. Three runs in a row
+    # whose return rose by less than min-rise are an alert - a pump or a sensor to look at; a run that rises again an info
+    automation:
+      enabled: true
+      rooms:
+        - bathroom up
+        - bathroom down
+      start-below: 30
+      pause-after: PT20M
+      quiet-from: "23:30"
+      quiet-to: "05:30"
+      comfort-windows:
+        - from: "06:00"
+          to: "08:00"
+        - from: "19:00"
+          to: "23:30"
+      min-rise: 1.5
+      no-rise-runs: 3
 
 # the notifications of the alarms (HAS-319): the exchange is on the same broker as spring.rabbitmq.*, on its own virtual
 # host - a second connection (NotificationRabbitConfig); env is one of the two headers it routes by.
@@ -184,6 +207,7 @@ internal:
   service:
     database: http://localhost:6005
     presence: http://localhost:6009
+    light: http://localhost:6012
 
 # a local run never posts to the channel of the house: dev is routed to the dev queues
 notification:
@@ -226,6 +250,7 @@ internal:
   service:
     database: http://localhost:1
     presence: http://localhost:1
+    light: http://localhost:1
 
 notification:
   password: test
