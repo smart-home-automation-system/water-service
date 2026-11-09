@@ -9,7 +9,7 @@ the consumption by day, week, month and year on `GET /home/water/consumption`; s
 the waterworks compared with what the house measured, and the daily history imported from the Shelly cloud; since HAS-319
 the alarms of the mains, the valve and frost, and since HAS-320 those of the flow - high, continuous, in an empty house; since
 HAS-404 the circulation pump of the hot water (relay 1 of the Shelly Uni): its state and a manual start, and since HAS-405 its
-automation (the motion and the lights of the bathrooms, comfort windows).
+automation (the motion and the lights of the bathrooms, comfort windows); since HAS-397 the water softener, read from the iQua cloud.
 
 Part of the smart-home-automation-system organization — org-wide conventions, the
 repository map and working rules come from the workspace-level context
@@ -17,7 +17,7 @@ repository map and working rules come from the workspace-level context
 repository themselves; Claude's default role here is analysis, code review and security
 review - the owner had Claude implement the readings of the water valve (HAS-316), the consumption
 (HAS-317), the bills (HAS-318), the alarms (HAS-319, HAS-320), the command of the valve (HAS-321) and the circulation pump
-(HAS-404, HAS-405) and reviews them
+(HAS-404, HAS-405) and the water softener (HAS-397) and reviews them
 in IntelliJ.
 
 ## Role in the system
@@ -31,7 +31,8 @@ in IntelliJ.
   (`GET /home/device/registry?kind=water valve&enabled=true`), `presence-service` for whether anybody is
   at home (`GET /home/presence/residents/presence` over k8s DNS, every minute - HAS-320; and when a trigger of the
   circulation comes - HAS-405), `light-service` for the bathrooms (`GET /home/light/rooms/{room}` over k8s DNS, every
-  10 s - HAS-405), and PostgreSQL.
+  10 s - HAS-405), the iQua cloud for the water softener (`api.myiquaapp.com` over the internet, every 5 min - HAS-397),
+  and PostgreSQL.
 - Consumes: `device.prod.water` on `/device` (user `device`, `rabbitmq-password`) - every device
   event, of which only the valve is read (HAS-316).
 - Publishes: the alarms of the valve to the `notification` exchange of `/notification` (user `notification`,
@@ -50,8 +51,8 @@ in IntelliJ.
   skipped.
 - Local run: `home,local` Spring profiles, port `6006` (Actuator `8006`); in-cluster port
   `6200`, Actuator `8200`. Needs PostgreSQL (`database.*`, Flyway runs at startup).
-- Spring Boot **4.1.2** with logbook 4.2.0; `cholewa-commons` 1.13.0, `smart-home-sdk` 1.16.0,
-  `shelly-client` 2.6.0 (the timer of a relay, HAS-404) **with its beans on** since HAS-316 (`ShellyRpcClient`, `ShellyGen1Client`,
+- Spring Boot **4.1.2** with logbook 4.2.0; `cholewa-commons` 1.13.0, `smart-home-sdk` 1.18.0,
+  `shelly-client` 2.7.0 (bumped with HAS-397; the timer of a relay of 2.6.0 since HAS-404) **with its beans on** since HAS-316 (`ShellyRpcClient`, `ShellyGen1Client`,
   `ShellyMqttDecoder` - pinned by `WaterServiceApplicationTest`); own libraries on the latest releases, as
   the org rule asks of every service task.
 - A local run needs `rabbitmq-password` (any value without a broker - the listener then retries in the
@@ -332,6 +333,39 @@ in IntelliJ.
       `NotificationPublisher` of the alarms.
     - The takeover: the scene "CONTROL WATER CIRCULATION" of the Shelly cloud is disabled (not removed) by the owner at the
       deploy of 0.14.0 - with both on, the pump would run twice as often.
+  - **The water softener** (HAS-397, epic HAS-396, package `softener`) - what is easy to break:
+    - **Cloud only**: the Viessmann AquaHome 20 Smart is an EcoWater / iQua device with nothing local to read (scanned
+      2026-11-05; its LAN address belongs to deployment-tools, never here). `IquaClient` speaks to the cloud of the iQua
+      application, `https://api.myiquaapp.com/v1` (public OpenAPI at `/v1/openapi.json`); reference implementation
+      Fidziu/homeassistant-myiqua-softener. The account is `iqua-email` / `iqua-password` of the secret `water`, required.
+    - **The token in memory only**: `POST /auth/login` gives a JWT of about 24 h and a refresh token; taken anew an hour
+      before the `exp` of the JWT (12 h without one) and once after a `401` - `POST /auth/refresh` first, a login when it
+      fails; one more call after a new token, never a loop. Two calls that need a token at once share one taking.
+    - **`LoginGuard`**: three failed logins within 30 min hold every login for 30 min after the last of them - **the cloud
+      blocks an account above about 1000 calls a day**, and a wrong password must not become a login every 5 min. A success
+      forgets the failures. Every failed login counts, the network ones too.
+    - **`SoftenerReader`** (`water.softener.cloud.interval` PT5M, 1 - 60 min, a bare number is minutes - `timeUnit` of the
+      `@Scheduled` too; bounded at 50 s): the devices of the account at the first pass and once a day (the softener of
+      `water.softener.serial-number`, the first one without it), the detail every pass - one call of data. No softener: `reachable`
+      false at once; a failed read or a pass cut off by its bound is a missed pass, two in a row unreachable; the last reading
+      is kept. One WARN an hour per kind of failure (`FailureLog`, a copy of energy-service - the second), an INFO at the return.
+    - **`SoftenerReading`** decodes `device.properties` by name: the volumes and the flow from `converted_value` **only when
+      `converted_units` is litres** (`Liters`, `liters/min` - `value` is gallons whatever the account shows); **the salt from
+      `enriched_data.water_treatment.salt_level_percent`**, the per cent the application shows - `salt_level_tenths` is no
+      per cent (20 while the application showed 25 % on 2026-11-09; the task had asked for it / 10); the flags 0 / 1 or
+      booleans; a property left out or not a number is null, never a default; one it does not know is a DEBUG once. The
+      answer of the real softener read on 2026-11-09 is `src/test/resources/iqua/detail-or-summary.json` (the account, the
+      dealer, the serials and the ids left out) and `SoftenerReadingTest` pins the mapping on it.
+    - **The flow is frozen between live sessions**: the cloud refreshes `current_water_flow_gpm` only while an application
+      keeps a live session (the WebSocket of `/devices/{id}/live` - HAS-401); `GET /softener` serves what the cloud last had.
+    - **`SoftenerTracker`** holds the state in memory (one instance, `Recreate`) for the history, the alerts, the regeneration
+      and the live flow of the epic (HAS-398..401). `GET /softener`: `503 SOFTENER_UNAVAILABLE` before the first reading, `stale`
+      past two intervals, dates of the regeneration and the salt from the days of the reading.
+    - **What Logbook may not write** (`LogbookConfig`, the default body filter of Logbook merged in): the e-mail and the
+      password of the login, both tokens, the account and the address that come with a device. The `Authorization` header
+      is masked by Logbook itself. A failure of the cloud is a fixed message with the status alone (`IquaException`).
+      `scripts/iqua/read-softener.ps1` of deployment-tools reads the softener once by hand - the owner runs it, it asks for
+      the account.
   - **Rehearsed** (2026-11-04): the released 0.6.1 image applied V1-V2 on a throwaway PostgreSQL with SSL (a user
     with `USAGE, CREATE` on `public` only), the new jar V3 with the real valve and the registry through a
     port-forward, no broker: `/valve` answered the valve within 10 s, a row of the counter a change, the same

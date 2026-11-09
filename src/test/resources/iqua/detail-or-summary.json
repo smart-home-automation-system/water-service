@@ -1,0 +1,1336 @@
+{
+  "device": {
+    "id": "00000000-0000-0000-0000-000000000001",
+    "thing_name": "softener-thing",
+    "system_type": "demand softener",
+    "system_type_display": "Demand Softener",
+    "serial_number": "SN0000000000",
+    "nickname": "Softener",
+    "is_shared_with_dealer": false,
+    "is_rental": null,
+    "is_disabled": false,
+    "is_online": true,
+    "properties": {
+      "_internal_is_online": {
+        "name": "_internal_is_online",
+        "value": true,
+        "created_at": "2025-08-31T22:38:05Z",
+        "updated_at": "2026-10-10T18:08:25Z"
+      },
+      "app_active": {
+        "name": "app_active",
+        "value": false,
+        "created_at": "2025-10-15T23:01:35Z",
+        "updated_at": "2026-11-05T09:29:32Z"
+      },
+      "app_active_timeout": {
+        "name": "app_active_timeout",
+        "value": 5,
+        "created_at": "2025-10-30T15:23:48Z",
+        "updated_at": "2025-10-30T15:23:48Z"
+      },
+      "aux_control_state_enum": {
+        "name": "aux_control_state_enum",
+        "value": 0,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2026-11-05T09:07:16Z"
+      },
+      "aux_control_type_enum": {
+        "name": "aux_control_type_enum",
+        "value": 0,
+        "created_at": "2025-10-30T03:29:34Z",
+        "updated_at": "2025-10-30T03:29:34Z"
+      },
+      "average_exhaustion_percent": {
+        "name": "average_exhaustion_percent",
+        "value": 886,
+        "created_at": "2025-08-17T00:00:07Z",
+        "updated_at": "2026-11-09T01:01:52Z"
+      },
+      "avg_daily_dev_day_1_gals": {
+        "name": "avg_daily_dev_day_1_gals",
+        "value": 38,
+        "created_at": "2025-08-17T00:00:07Z",
+        "updated_at": "2026-11-09T01:01:52Z",
+        "converted_value": 144,
+        "converted_units": "Liters",
+        "unit_conversions": [
+          {
+            "unit": "Gallons",
+            "value": 38
+          },
+          {
+            "unit": "Liters",
+            "value": 144
+          }
+        ]
+      },
+      "avg_daily_dev_day_2_gals": {
+        "name": "avg_daily_dev_day_2_gals",
+        "value": 28,
+        "created_at": "2025-08-18T00:00:08Z",
+        "updated_at": "2026-11-03T01:01:52Z",
+        "converted_value": 106,
+        "converted_units": "Liters",
+        "unit_conversions": [
+          {
+            "unit": "Gallons",
+            "value": 28
+          },
+          {
+            "unit": "Liters",
+            "value": 106
+          }
+        ]
+      },
+      "avg_daily_dev_day_3_gals": {
+        "name": "avg_daily_dev_day_3_gals",
+        "value": 16,
+        "created_at": "2025-08-12T00:00:08Z",
+        "updated_at": "2026-11-04T01:01:54Z",
+        "converted_value": 61,
+        "converted_units": "Liters",
+        "unit_conversions": [
+          {
+            "unit": "Gallons",
+            "value": 16
+          },
+          {
+            "unit": "Liters",
+            "value": 61
+          }
+        ]
+      },
+      "avg_daily_dev_day_4_gals": {
+        "name": "avg_daily_dev_day_4_gals",
+        "value": 22,
+        "created_at": "2025-08-13T00:00:11Z",
+        "updated_at": "2026-11-08T01:01:44Z",
+        "converted_value": 83,
+        "converted_units": "Liters",
+        "unit_conversions": [
+          {
+            "unit": "Gallons",
+            "value": 22
+          },
+          {
+            "unit": "Liters",
+            "value": 83
+          }
+        ]
+      },
+      "avg_daily_dev_day_5_gals": {
+        "name": "avg_daily_dev_day_5_gals",
+        "value": 12,
+        "created_at": "2025-08-14T00:00:12Z",
+        "updated_at": "2026-11-06T01:01:58Z",
+        "converted_value": 45,
+        "converted_units": "Liters",
+        "unit_conversions": [
+          {
+            "unit": "Gallons",
+            "value": 12
+          },
+          {
+            "unit": "Liters",
+            "value": 45
+          }
+        ]
+      },
+      "avg_daily_dev_day_6_gals": {
+        "name": "avg_daily_dev_day_6_gals",
+        "value": 25,
+        "created_at": "2025-08-15T00:00:15Z",
+        "updated_at": "2026-11-07T01:02:00Z",
+        "converted_value": 95,
+        "converted_units": "Liters",
+        "unit_conversions": [
+          {
+            "unit": "Gallons",
+            "value": 25
+          },
+          {
+            "unit": "Liters",
+            "value": 95
+          }
+        ]
+      },
+      "avg_daily_dev_day_7_gals": {
+        "name": "avg_daily_dev_day_7_gals",
+        "value": 0,
+        "created_at": "2025-10-30T03:29:34Z",
+        "updated_at": "2025-10-30T03:29:34Z",
+        "converted_value": 0,
+        "converted_units": "Liters",
+        "unit_conversions": [
+          {
+            "unit": "Gallons",
+            "value": 0
+          },
+          {
+            "unit": "Liters",
+            "value": 0
+          }
+        ]
+      },
+      "avg_daily_use_day_1_gals": {
+        "name": "avg_daily_use_day_1_gals",
+        "value": 164,
+        "created_at": "2025-08-17T00:00:07Z",
+        "updated_at": "2026-11-09T01:01:52Z",
+        "converted_value": 621,
+        "converted_units": "Liters",
+        "unit_conversions": [
+          {
+            "unit": "Gallons",
+            "value": 164
+          },
+          {
+            "unit": "Liters",
+            "value": 621
+          }
+        ]
+      },
+      "avg_daily_use_day_2_gals": {
+        "name": "avg_daily_use_day_2_gals",
+        "value": 164,
+        "created_at": "2025-08-18T00:00:08Z",
+        "updated_at": "2026-11-03T01:01:52Z",
+        "converted_value": 621,
+        "converted_units": "Liters",
+        "unit_conversions": [
+          {
+            "unit": "Gallons",
+            "value": 164
+          },
+          {
+            "unit": "Liters",
+            "value": 621
+          }
+        ]
+      },
+      "avg_daily_use_day_3_gals": {
+        "name": "avg_daily_use_day_3_gals",
+        "value": 115,
+        "created_at": "2025-08-12T00:00:08Z",
+        "updated_at": "2026-11-04T01:01:54Z",
+        "converted_value": 435,
+        "converted_units": "Liters",
+        "unit_conversions": [
+          {
+            "unit": "Gallons",
+            "value": 115
+          },
+          {
+            "unit": "Liters",
+            "value": 435
+          }
+        ]
+      },
+      "avg_daily_use_day_4_gals": {
+        "name": "avg_daily_use_day_4_gals",
+        "value": 115,
+        "created_at": "2025-08-13T00:00:11Z",
+        "updated_at": "2026-11-08T01:01:44Z",
+        "converted_value": 435,
+        "converted_units": "Liters",
+        "unit_conversions": [
+          {
+            "unit": "Gallons",
+            "value": 115
+          },
+          {
+            "unit": "Liters",
+            "value": 435
+          }
+        ]
+      },
+      "avg_daily_use_day_5_gals": {
+        "name": "avg_daily_use_day_5_gals",
+        "value": 86,
+        "created_at": "2025-08-14T00:00:12Z",
+        "updated_at": "2026-11-06T01:01:58Z",
+        "converted_value": 326,
+        "converted_units": "Liters",
+        "unit_conversions": [
+          {
+            "unit": "Gallons",
+            "value": 86
+          },
+          {
+            "unit": "Liters",
+            "value": 326
+          }
+        ]
+      },
+      "avg_daily_use_day_6_gals": {
+        "name": "avg_daily_use_day_6_gals",
+        "value": 86,
+        "created_at": "2025-08-15T00:00:15Z",
+        "updated_at": "2026-11-07T01:02:00Z",
+        "converted_value": 326,
+        "converted_units": "Liters",
+        "unit_conversions": [
+          {
+            "unit": "Gallons",
+            "value": 86
+          },
+          {
+            "unit": "Liters",
+            "value": 326
+          }
+        ]
+      },
+      "avg_daily_use_day_7_gals": {
+        "name": "avg_daily_use_day_7_gals",
+        "value": 122,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2025-10-30T03:29:33Z",
+        "converted_value": 462,
+        "converted_units": "Liters",
+        "unit_conversions": [
+          {
+            "unit": "Gallons",
+            "value": 122
+          },
+          {
+            "unit": "Liters",
+            "value": 462
+          }
+        ]
+      },
+      "avg_daily_use_gals": {
+        "name": "avg_daily_use_gals",
+        "value": 133,
+        "created_at": "2025-08-11T22:00:09Z",
+        "updated_at": "2026-11-08T23:01:51Z",
+        "converted_value": 503,
+        "converted_units": "Liters",
+        "unit_conversions": [
+          {
+            "unit": "Gallons",
+            "value": 133
+          },
+          {
+            "unit": "Liters",
+            "value": 503
+          }
+        ]
+      },
+      "avg_days_between_regens": {
+        "name": "avg_days_between_regens",
+        "value": 584,
+        "created_at": "2025-08-17T00:00:07Z",
+        "updated_at": "2026-11-09T01:01:52Z"
+      },
+      "avg_salt_per_regen_lbs": {
+        "name": "avg_salt_per_regen_lbs",
+        "value": 22500,
+        "created_at": "2025-08-17T00:02:27Z",
+        "updated_at": "2026-11-09T01:04:11Z",
+        "converted_value": 10206,
+        "converted_units": "kilograms",
+        "unit_conversions": [
+          {
+            "unit": "pounds",
+            "value": 22500
+          },
+          {
+            "unit": "kilograms",
+            "value": 10206
+          }
+        ]
+      },
+      "backwash_secs": {
+        "name": "backwash_secs",
+        "value": 300,
+        "created_at": "2025-10-30T03:29:34Z",
+        "updated_at": "2025-10-30T03:29:34Z"
+      },
+      "base_software_version": {
+        "name": "base_software_version",
+        "value": "r4.5 MPC01154",
+        "created_at": "2025-09-25T04:49:59Z",
+        "updated_at": "2026-10-28T07:59:21Z"
+      },
+      "build_date_code": {
+        "name": "build_date_code",
+        "value": 23321,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2025-10-30T03:29:33Z"
+      },
+      "build_day": {
+        "name": "build_day",
+        "value": 321,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2025-10-30T03:29:33Z"
+      },
+      "build_fixture": {
+        "name": "build_fixture",
+        "value": 40,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2025-10-30T03:29:33Z"
+      },
+      "build_sequence_number": {
+        "name": "build_sequence_number",
+        "value": 35500,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2025-10-30T03:29:33Z"
+      },
+      "build_year": {
+        "name": "build_year",
+        "value": 2023,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2025-10-30T03:29:33Z"
+      },
+      "capacity_remaining_percent": {
+        "name": "capacity_remaining_percent",
+        "value": 1000,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2025-10-30T03:29:33Z"
+      },
+      "chem_feed_gals": {
+        "name": "chem_feed_gals",
+        "value": 1,
+        "created_at": "2025-10-30T03:29:34Z",
+        "updated_at": "2025-10-30T03:29:34Z",
+        "converted_value": 4,
+        "converted_units": "Liters",
+        "unit_conversions": [
+          {
+            "unit": "Gallon",
+            "value": 1
+          },
+          {
+            "unit": "Liters",
+            "value": 4
+          }
+        ]
+      },
+      "chem_feed_tenths_secs": {
+        "name": "chem_feed_tenths_secs",
+        "value": 1,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2025-10-30T03:29:33Z"
+      },
+      "current_cam_speed_secs": {
+        "name": "current_cam_speed_secs",
+        "value": 37,
+        "created_at": "2025-09-07T02:02:05Z",
+        "updated_at": "2026-10-17T02:01:50Z"
+      },
+      "current_time_secs": {
+        "name": "current_time_secs",
+        "value": 7340,
+        "created_at": "2025-09-25T04:49:59Z",
+        "updated_at": "2026-11-08T01:04:10Z"
+      },
+      "current_valve_position_enum": {
+        "name": "current_valve_position_enum",
+        "value": 0,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2026-11-05T09:07:16Z"
+      },
+      "current_water_flow_gpm": {
+        "name": "current_water_flow_gpm",
+        "value": 0,
+        "created_at": "2025-10-15T22:59:49Z",
+        "updated_at": "2026-11-05T09:07:16Z",
+        "converted_value": 0,
+        "converted_units": "liters/min",
+        "unit_conversions": [
+          {
+            "unit": "gpm",
+            "value": 0
+          },
+          {
+            "unit": "liters/min",
+            "value": 0
+          }
+        ]
+      },
+      "daily_avg_rock_removed_lbs": {
+        "name": "daily_avg_rock_removed_lbs",
+        "value": 2280,
+        "created_at": "2025-08-11T22:00:09Z",
+        "updated_at": "2026-11-08T23:01:51Z",
+        "converted_value": 1034,
+        "converted_units": "kilograms",
+        "unit_conversions": [
+          {
+            "unit": "pounds",
+            "value": 2280
+          },
+          {
+            "unit": "kilograms",
+            "value": 1034
+          }
+        ]
+      },
+      "date_format_enum": {
+        "name": "date_format_enum",
+        "value": 1,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2025-10-30T03:29:33Z"
+      },
+      "days_in_operation": {
+        "name": "days_in_operation",
+        "value": 917,
+        "created_at": "2025-08-11T22:00:09Z",
+        "updated_at": "2026-11-08T23:01:51Z"
+      },
+      "days_since_last_regen": {
+        "name": "days_since_last_regen",
+        "value": 0,
+        "created_at": "2025-08-12T00:00:08Z",
+        "updated_at": "2026-11-09T01:01:52Z"
+      },
+      "days_since_last_time_loss": {
+        "name": "days_since_last_time_loss",
+        "value": 917,
+        "created_at": "2025-08-11T22:00:09Z",
+        "updated_at": "2026-11-08T23:01:51Z"
+      },
+      "dealer_info_1": {
+        "name": "dealer_info_1",
+        "value": "",
+        "created_at": "2026-09-30T19:33:58Z",
+        "updated_at": "2026-09-30T19:33:59Z"
+      },
+      "dealer_info_2": {
+        "name": "dealer_info_2",
+        "value": "",
+        "created_at": "2026-09-30T19:33:58Z",
+        "updated_at": "2026-09-30T19:33:59Z"
+      },
+      "draw_secs": {
+        "name": "draw_secs",
+        "value": 0,
+        "created_at": "2025-10-30T03:29:34Z",
+        "updated_at": "2025-10-30T03:29:34Z"
+      },
+      "efficiency_mode_enum": {
+        "name": "efficiency_mode_enum",
+        "value": 1,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2025-10-30T03:29:33Z"
+      },
+      "error_1_count": {
+        "name": "error_1_count",
+        "value": 0,
+        "created_at": "2025-10-30T03:29:34Z",
+        "updated_at": "2025-10-30T03:29:34Z"
+      },
+      "error_3_count": {
+        "name": "error_3_count",
+        "value": 0,
+        "created_at": "2025-10-30T03:29:34Z",
+        "updated_at": "2025-10-30T03:29:34Z"
+      },
+      "error_4_count": {
+        "name": "error_4_count",
+        "value": 0,
+        "created_at": "2025-10-30T03:29:34Z",
+        "updated_at": "2025-10-30T03:29:34Z"
+      },
+      "error_5_count": {
+        "name": "error_5_count",
+        "value": 0,
+        "created_at": "2025-10-30T03:29:34Z",
+        "updated_at": "2025-10-30T03:29:34Z"
+      },
+      "error_code": {
+        "name": "error_code",
+        "value": 0,
+        "created_at": "2025-10-30T03:29:34Z",
+        "updated_at": "2025-10-30T03:29:34Z"
+      },
+      "error_code_alert": {
+        "name": "error_code_alert",
+        "value": 0,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2025-10-30T03:29:33Z"
+      },
+      "esp_software_part_number": {
+        "name": "esp_software_part_number",
+        "value": "7397335",
+        "created_at": "2025-09-25T04:49:59Z",
+        "updated_at": "2026-10-28T07:59:21Z"
+      },
+      "excessive_water_use_alert": {
+        "name": "excessive_water_use_alert",
+        "value": 0,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2026-10-18T23:59:59Z"
+      },
+      "fast_rinse_secs": {
+        "name": "fast_rinse_secs",
+        "value": 120,
+        "created_at": "2025-10-30T03:29:34Z",
+        "updated_at": "2025-10-30T03:29:34Z"
+      },
+      "feature_97pct_enum": {
+        "name": "feature_97pct_enum",
+        "value": 0,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2025-10-30T03:29:33Z"
+      },
+      "fill_secs": {
+        "name": "fill_secs",
+        "value": 0,
+        "created_at": "2025-10-30T03:29:34Z",
+        "updated_at": "2025-10-30T03:29:34Z"
+      },
+      "flow_monitor_alert": {
+        "name": "flow_monitor_alert",
+        "value": 0,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2026-05-05T17:05:22Z"
+      },
+      "flow_monitor_min_rate_gpm": {
+        "name": "flow_monitor_min_rate_gpm",
+        "value": 4,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2025-10-30T03:29:33Z",
+        "converted_value": 1.5141648,
+        "converted_units": "liters/min",
+        "unit_conversions": [
+          {
+            "unit": "gpm",
+            "value": 0.4
+          },
+          {
+            "unit": "liters/min",
+            "value": 1.5141648
+          }
+        ]
+      },
+      "flow_monitor_trip_sec": {
+        "name": "flow_monitor_trip_sec",
+        "value": 1200,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2025-10-30T03:29:33Z"
+      },
+      "gallons_used_today": {
+        "name": "gallons_used_today",
+        "value": 27,
+        "created_at": "2025-09-22T18:10:16Z",
+        "updated_at": "2026-11-09T08:39:52Z",
+        "converted_value": 102,
+        "converted_units": "Liters",
+        "unit_conversions": [
+          {
+            "unit": "Gallons",
+            "value": 27
+          },
+          {
+            "unit": "Liters",
+            "value": 102
+          }
+        ]
+      },
+      "hardness_grains": {
+        "name": "hardness_grains",
+        "value": 12,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2025-10-30T03:29:33Z"
+      },
+      "hardness_unit_enum": {
+        "name": "hardness_unit_enum",
+        "value": 1,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2025-10-30T03:29:33Z"
+      },
+      "iron_level_tenths_ppm": {
+        "name": "iron_level_tenths_ppm",
+        "value": 0,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2025-10-30T03:29:33Z"
+      },
+      "low_salt_alert": {
+        "name": "low_salt_alert",
+        "value": 0,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2026-10-05T00:01:40Z"
+      },
+      "manual_regens": {
+        "name": "manual_regens",
+        "value": 2,
+        "created_at": "2025-10-30T03:29:34Z",
+        "updated_at": "2025-10-30T03:29:34Z"
+      },
+      "max_days_between_regens": {
+        "name": "max_days_between_regens",
+        "value": 0,
+        "created_at": "2025-10-30T03:29:34Z",
+        "updated_at": "2025-10-30T03:29:34Z"
+      },
+      "model_description": {
+        "name": "model_description",
+        "value": "AquaHome 20 Smart",
+        "created_at": "2025-09-25T04:49:59Z",
+        "updated_at": "2026-10-28T07:59:21Z"
+      },
+      "model_id": {
+        "name": "model_id",
+        "value": 115401,
+        "created_at": "2000-01-01T00:00:00Z",
+        "updated_at": "2026-10-28T07:59:21Z"
+      },
+      "operating_capacity_grains": {
+        "name": "operating_capacity_grains",
+        "value": 9888,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2025-10-30T03:29:33Z",
+        "converted_value": 6,
+        "converted_units": "mols",
+        "unit_conversions": [
+          {
+            "unit": "grains",
+            "value": 9888
+          },
+          {
+            "unit": "mols",
+            "value": 6
+          },
+          {
+            "unit": "degree_f",
+            "value": 64
+          }
+        ]
+      },
+      "out_of_salt_estimate_days": {
+        "name": "out_of_salt_estimate_days",
+        "value": 73,
+        "created_at": "2025-08-11T02:02:02Z",
+        "updated_at": "2026-11-09T03:03:47Z"
+      },
+      "peak_water_flow_gpm": {
+        "name": "peak_water_flow_gpm",
+        "value": 67,
+        "created_at": "2025-10-30T03:29:34Z",
+        "updated_at": "2025-10-30T03:29:34Z",
+        "converted_value": 25.3622604,
+        "converted_units": "liters/min",
+        "unit_conversions": [
+          {
+            "unit": "gpm",
+            "value": 6.7
+          },
+          {
+            "unit": "liters/min",
+            "value": 25.3622604
+          }
+        ]
+      },
+      "power_outage_count": {
+        "name": "power_outage_count",
+        "value": 98,
+        "created_at": "2025-09-25T04:50:00Z",
+        "updated_at": "2026-10-28T07:59:21Z"
+      },
+      "program_code": {
+        "name": "program_code",
+        "value": 1154,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2025-10-30T03:29:33Z"
+      },
+      "pwa_number": {
+        "name": "pwa_number",
+        "value": 7383865,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2025-10-30T03:29:33Z"
+      },
+      "regen_enable_enum": {
+        "name": "regen_enable_enum",
+        "value": 1,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2025-10-30T03:29:33Z"
+      },
+      "regen_status_enum": {
+        "name": "regen_status_enum",
+        "value": 0,
+        "created_at": "2025-08-11T02:02:02Z",
+        "updated_at": "2026-11-09T03:03:47Z"
+      },
+      "regen_time_rem_secs": {
+        "name": "regen_time_rem_secs",
+        "value": 0,
+        "created_at": "2025-10-15T22:59:49Z",
+        "updated_at": "2026-11-05T09:07:16Z"
+      },
+      "regen_time_secs": {
+        "name": "regen_time_secs",
+        "value": 7200,
+        "created_at": "2025-09-25T04:49:59Z",
+        "updated_at": "2026-10-28T07:59:21Z"
+      },
+      "requested_valve_pos_enum": {
+        "name": "requested_valve_pos_enum",
+        "value": 0,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2026-11-05T09:07:16Z"
+      },
+      "resin_alert": {
+        "name": "resin_alert",
+        "value": 0,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2025-10-30T03:29:33Z"
+      },
+      "rf_signal_bars": {
+        "name": "rf_signal_bars",
+        "value": 2,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2026-11-05T09:24:34Z"
+      },
+      "rf_signal_strength_dbm": {
+        "name": "rf_signal_strength_dbm",
+        "value": -70,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2026-11-05T09:24:34Z"
+      },
+      "rinse_type_enum": {
+        "name": "rinse_type_enum",
+        "value": 1,
+        "created_at": "2025-10-30T03:29:34Z",
+        "updated_at": "2025-10-30T03:29:34Z"
+      },
+      "rock_removed_since_rech_lbs": {
+        "name": "rock_removed_since_rech_lbs",
+        "value": 0,
+        "created_at": "2025-10-30T03:29:34Z",
+        "updated_at": "2025-10-30T03:29:34Z",
+        "converted_value": 0,
+        "converted_units": "kilograms",
+        "unit_conversions": [
+          {
+            "unit": "pounds",
+            "value": 0
+          },
+          {
+            "unit": "kilograms",
+            "value": 0
+          }
+        ]
+      },
+      "salt_effic_grains_per_lb": {
+        "name": "salt_effic_grains_per_lb",
+        "value": 3819,
+        "created_at": "2025-08-17T00:02:27Z",
+        "updated_at": "2026-11-09T01:04:11Z"
+      },
+      "salt_level_tenths": {
+        "name": "salt_level_tenths",
+        "value": 20,
+        "created_at": "2025-09-07T00:01:54Z",
+        "updated_at": "2026-10-05T00:01:31Z"
+      },
+      "salt_monitor_enum": {
+        "name": "salt_monitor_enum",
+        "value": 1,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2025-10-30T03:29:33Z"
+      },
+      "salt_type_enum": {
+        "name": "salt_type_enum",
+        "value": 0,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2025-10-30T03:29:33Z"
+      },
+      "second_backwash_cycles": {
+        "name": "second_backwash_cycles",
+        "value": 0,
+        "created_at": "2025-10-30T03:29:34Z",
+        "updated_at": "2025-10-30T03:29:34Z"
+      },
+      "second_backwash_secs": {
+        "name": "second_backwash_secs",
+        "value": 300,
+        "created_at": "2025-10-30T03:29:34Z",
+        "updated_at": "2025-10-30T03:29:34Z"
+      },
+      "service_active": {
+        "name": "service_active",
+        "value": true,
+        "created_at": "2025-10-30T15:23:48Z",
+        "updated_at": "2026-11-05T09:24:32Z"
+      },
+      "service_reminder_months": {
+        "name": "service_reminder_months",
+        "value": -1,
+        "created_at": "2024-05-06T07:56:27Z",
+        "updated_at": "2024-05-06T07:56:27Z"
+      },
+      "start_cam_speed_secs": {
+        "name": "start_cam_speed_secs",
+        "value": 38,
+        "created_at": "2025-10-30T03:29:34Z",
+        "updated_at": "2025-10-30T03:29:34Z"
+      },
+      "system_type": {
+        "name": "system_type",
+        "value": "demand softener",
+        "created_at": "2025-09-25T04:49:59Z",
+        "updated_at": "2026-10-28T07:59:21Z"
+      },
+      "time_format_enum": {
+        "name": "time_format_enum",
+        "value": 1,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2025-10-30T03:29:33Z"
+      },
+      "time_lost_events": {
+        "name": "time_lost_events",
+        "value": 2,
+        "created_at": "2025-10-30T03:29:34Z",
+        "updated_at": "2025-10-30T03:29:34Z"
+      },
+      "top_level_part_number": {
+        "name": "top_level_part_number",
+        "value": "7938279",
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2025-10-30T03:29:33Z"
+      },
+      "total_outlet_water_gals": {
+        "name": "total_outlet_water_gals",
+        "value": 112381,
+        "created_at": "2025-08-11T02:52:07Z",
+        "updated_at": "2026-11-09T08:39:52Z",
+        "converted_value": 425408,
+        "converted_units": "Liters",
+        "unit_conversions": [
+          {
+            "unit": "Gallons",
+            "value": 112381
+          },
+          {
+            "unit": "Liters",
+            "value": 425408
+          }
+        ]
+      },
+      "total_regens": {
+        "name": "total_regens",
+        "value": 156,
+        "created_at": "2025-08-17T00:00:07Z",
+        "updated_at": "2026-11-09T01:01:52Z"
+      },
+      "total_rock_removed_lbs": {
+        "name": "total_rock_removed_lbs",
+        "value": 1915,
+        "created_at": "2025-08-17T00:02:27Z",
+        "updated_at": "2026-11-09T01:04:11Z",
+        "converted_value": 869,
+        "converted_units": "kilograms",
+        "unit_conversions": [
+          {
+            "unit": "pounds",
+            "value": 1915
+          },
+          {
+            "unit": "kilograms",
+            "value": 869
+          }
+        ]
+      },
+      "total_salt_use_lbs": {
+        "name": "total_salt_use_lbs",
+        "value": 3510,
+        "created_at": "2025-08-17T00:02:27Z",
+        "updated_at": "2026-11-09T01:04:11Z",
+        "converted_value": 1592,
+        "converted_units": "kilograms",
+        "unit_conversions": [
+          {
+            "unit": "pounds",
+            "value": 3510
+          },
+          {
+            "unit": "kilograms",
+            "value": 1592
+          }
+        ]
+      },
+      "total_untreated_water_gals": {
+        "name": "total_untreated_water_gals",
+        "value": 630,
+        "created_at": "2025-10-30T03:29:34Z",
+        "updated_at": "2026-09-06T00:03:11Z",
+        "converted_value": 2385,
+        "converted_units": "Liters",
+        "unit_conversions": [
+          {
+            "unit": "Gallons",
+            "value": 630
+          },
+          {
+            "unit": "Liters",
+            "value": 2385
+          }
+        ]
+      },
+      "treated_water_avail_gals": {
+        "name": "treated_water_avail_gals",
+        "value": 586,
+        "created_at": "2025-10-15T22:59:49Z",
+        "updated_at": "2026-11-05T09:07:16Z",
+        "converted_value": 2218,
+        "converted_units": "Liters",
+        "unit_conversions": [
+          {
+            "unit": "Gallons",
+            "value": 586
+          },
+          {
+            "unit": "Liters",
+            "value": 2218
+          }
+        ]
+      },
+      "tz_dev": {
+        "name": "tz_dev",
+        "value": "CET-1CEST,M3.5.0,M10.5.0/3",
+        "created_at": "2024-05-06T07:54:53Z",
+        "updated_at": "2024-05-06T07:54:53Z"
+      },
+      "tz_id": {
+        "name": "tz_id",
+        "value": "Europe/Warsaw",
+        "created_at": "2024-05-06T07:54:53Z",
+        "updated_at": "2024-05-06T07:54:53Z"
+      },
+      "user_lockout_enum": {
+        "name": "user_lockout_enum",
+        "value": 0,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2025-10-30T03:29:33Z"
+      },
+      "valve_motor_state_enum": {
+        "name": "valve_motor_state_enum",
+        "value": 0,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2026-11-05T09:07:16Z"
+      },
+      "valve_pos_switch_enum": {
+        "name": "valve_pos_switch_enum",
+        "value": 1,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2026-11-05T09:07:16Z"
+      },
+      "valve_pos_time_left_secs": {
+        "name": "valve_pos_time_left_secs",
+        "value": 0,
+        "created_at": "2025-10-30T03:29:32Z",
+        "updated_at": "2026-11-05T09:07:16Z"
+      },
+      "valve_reindex_count": {
+        "name": "valve_reindex_count",
+        "value": 0,
+        "created_at": "2025-10-30T03:29:34Z",
+        "updated_at": "2025-10-30T03:29:34Z"
+      },
+      "volume_unit_enum": {
+        "name": "volume_unit_enum",
+        "value": 1,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2025-10-30T03:29:33Z"
+      },
+      "water_counter_gals": {
+        "name": "water_counter_gals",
+        "value": 111840,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2026-11-05T09:07:16Z",
+        "converted_value": 423360,
+        "converted_units": "Liters",
+        "unit_conversions": [
+          {
+            "unit": "Gallons",
+            "value": 111840
+          },
+          {
+            "unit": "Liters",
+            "value": 423360
+          }
+        ]
+      },
+      "water_shutoff_valve": {
+        "name": "water_shutoff_valve",
+        "value": 2,
+        "created_at": "2025-09-25T04:49:59Z",
+        "updated_at": "2026-10-28T07:59:21Z"
+      },
+      "water_shutoff_valve_alert": {
+        "name": "water_shutoff_valve_alert",
+        "value": 0,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2025-10-30T03:29:33Z"
+      },
+      "weight_unit_enum": {
+        "name": "weight_unit_enum",
+        "value": 1,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2025-10-30T03:29:33Z"
+      },
+      "wsov_device_action": {
+        "name": "wsov_device_action",
+        "value": 0,
+        "created_at": "2025-09-25T04:49:59Z",
+        "updated_at": "2026-10-28T07:59:21Z"
+      },
+      "wsov_error_code": {
+        "name": "wsov_error_code",
+        "value": 0,
+        "created_at": "2025-09-25T04:49:59Z",
+        "updated_at": "2026-10-28T07:59:21Z"
+      },
+      "wsov_error_code_alert": {
+        "name": "wsov_error_code_alert",
+        "value": 0,
+        "created_at": "2025-10-30T03:29:33Z",
+        "updated_at": "2025-10-30T03:29:33Z"
+      },
+      "wsov_installed": {
+        "name": "wsov_installed",
+        "value": 0,
+        "created_at": "2025-09-25T04:49:59Z",
+        "updated_at": "2026-10-28T07:59:21Z"
+      },
+      "wsov_manual_override": {
+        "name": "wsov_manual_override",
+        "value": 0,
+        "created_at": "2025-09-25T04:49:59Z",
+        "updated_at": "2026-10-28T07:59:21Z"
+      },
+      "wtd_monitor_enum": {
+        "name": "wtd_monitor_enum",
+        "value": 0,
+        "created_at": "2024-05-06T07:56:27Z",
+        "updated_at": "2024-05-06T07:56:27Z"
+      }
+    },
+    "enriched_data": {
+      "water_treatment": {
+        "treatment_system_type": "softener",
+        "salt_level_percent": 25,
+        "salt_level": {
+          "monitoring_enabled": true,
+          "salt_level_percent": 25,
+          "salt_level_percent_rounded": 25
+        },
+        "gallons_used_today": 0,
+        "regeneration": {
+          "regeneration_status": "none",
+          "can_schedule": true,
+          "can_recharge": true
+        },
+        "recharge": {
+          "state": "ready",
+          "ui": {
+            "status": {
+              "title": {
+                "key": "SoftenerRecharge",
+                "value": "Recharge"
+              },
+              "value": {
+                "key": "Auto",
+                "value": "Auto"
+              }
+            },
+            "manage_label": {
+              "key": "ManageRecharge",
+              "value": "Manage Recharge"
+            },
+            "dialog": {
+              "title": {
+                "key": "ManageRecharge",
+                "value": "Manage Recharge"
+              },
+              "message": {
+                "key": "PressRechargeNowToStart",
+                "value": "Press \"Recharge Now\" to start an immediate recharge or schedule a recharge at the time of your next recharge cycle"
+              },
+              "cancel_label": {
+                "key": "Cancel",
+                "value": "Cancel"
+              }
+            },
+            "actions": [
+              {
+                "id": "recharge_now",
+                "label": {
+                  "key": "RechargeNow",
+                  "value": "Recharge Now"
+                },
+                "command": {
+                  "function": "regenerate",
+                  "action": "regenerate"
+                },
+                "confirmation": {
+                  "title": {
+                    "key": "RechargeNowTitle",
+                    "value": "Recharge Now"
+                  },
+                  "message": {
+                    "key": "RechargeNowMessage",
+                    "value": "This will trigger an immediate recharge."
+                  },
+                  "confirm_label": {
+                    "key": "RechargeNow",
+                    "value": "Recharge Now"
+                  },
+                  "cancel_label": {
+                    "key": "Cancel",
+                    "value": "Cancel"
+                  }
+                }
+              },
+              {
+                "id": "schedule",
+                "label": {
+                  "key": "Schedule",
+                  "value": "Schedule"
+                },
+                "command": {
+                  "function": "regenerate",
+                  "action": "schedule"
+                },
+                "confirmation": {
+                  "title": {
+                    "key": "RechargeScheduleTitle",
+                    "value": "Schedule Recharge"
+                  },
+                  "message": {
+                    "key": "RechargeScheduleMessage",
+                    "value": "This will schedule a recharge for 02:00."
+                  },
+                  "confirm_label": {
+                    "key": "Schedule",
+                    "value": "Schedule"
+                  },
+                  "cancel_label": {
+                    "key": "Cancel",
+                    "value": "Cancel"
+                  }
+                }
+              }
+            ]
+          },
+          "time_remaining": {
+            "seconds": 0,
+            "display": "00:00:00"
+          },
+          "time_remaining_seconds": 0,
+          "current_valve_state": "Service",
+          "can_recharge": true,
+          "can_schedule": true
+        },
+        "regeneration_status": "none",
+        "water_treatment_status": {
+          "alert_badge_count": 0,
+          "salt_level_alert": false,
+          "flow_monitor_alert": false,
+          "flow_monitor_alerts": {
+            "1": false
+          },
+          "connection_alert": false,
+          "water_usage_alert": false,
+          "resin_alert": false,
+          "error_code_alert": false,
+          "service_reminder_message": "-1 months",
+          "water_to_drain_monitor_enabled": false
+        },
+        "rf_signal_strength_dbm": -70,
+        "model": "AquaHome 20 Smart",
+        "pwa": "7383865",
+        "date_code": "23321",
+        "control_version": "r4.5 MPC01154",
+        "wifi_module_version": "7397335",
+        "total_recharges": 156,
+        "days_since_last_recharge": 0,
+        "days_powered_up": 917,
+        "total_water_used": {
+          "value": 423024,
+          "units": "Liters",
+          "conversion_factor": 3.785412,
+          "conversions": [
+            {
+              "unit": "gallons",
+              "value": 111751,
+              "display_value": "111751",
+              "conversion_factor": 1,
+              "unit_of_measure": {
+                "singular": "gallon",
+                "plural": "gallons",
+                "min": 1,
+                "max": 255,
+                "step": 1,
+                "default": 1,
+                "conversion": 1
+              }
+            },
+            {
+              "unit": "liters",
+              "value": 423024,
+              "display_value": "423024.000",
+              "conversion_factor": 3.785412,
+              "unit_of_measure": {
+                "singular": "liter",
+                "plural": "liters",
+                "min": 3.785,
+                "max": 374,
+                "step": 3.785,
+                "default": 3.785,
+                "format": "%1.3f",
+                "conversion": 3.785412
+              }
+            }
+          ]
+        },
+        "treated_water_available": {
+          "value": 2218,
+          "units": "Liters",
+          "conversion_factor": 3.785412,
+          "conversions": [
+            {
+              "unit": "gallons",
+              "value": 586,
+              "display_value": "586",
+              "conversion_factor": 1,
+              "unit_of_measure": {
+                "singular": "gallon",
+                "plural": "gallons",
+                "min": 1,
+                "max": 255,
+                "step": 1,
+                "default": 1,
+                "conversion": 1
+              }
+            },
+            {
+              "unit": "liters",
+              "value": 2218,
+              "display_value": "2218.000",
+              "conversion_factor": 3.785412,
+              "unit_of_measure": {
+                "singular": "liter",
+                "plural": "liters",
+                "min": 3.785,
+                "max": 374,
+                "step": 3.785,
+                "default": 3.785,
+                "format": "%1.3f",
+                "conversion": 3.785412
+              }
+            }
+          ]
+        },
+        "flow_monitor_status": {
+          "count": 1
+        },
+        "features": [
+          "regeneration"
+        ]
+      }
+    }
+  }
+}

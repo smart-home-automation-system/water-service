@@ -92,6 +92,10 @@ new motion or a light switched on in a bathroom (read from `light-service`) and 
 windows, while somebody is at home, the tank is warm and the return cold. It takes over from the
 scene "CONTROL WATER CIRCULATION" of the Shelly cloud, disabled at its deploy.
 
+It reads the **water softener** too (HAS-397, epic HAS-396) - a Viessmann AquaHome 20 Smart, an EcoWater / iQua
+device with no local API: every five minutes from the cloud of the iQua application (`api.myiquaapp.com`), served on
+`GET /home/water/softener` - the water it treated, the salt, the regenerations, the hardness and its own alerts.
+
 Everything is non-blocking (Spring WebFlux / Reactor): the sensor is read with `WebClient`
 using the models from the shared `shelly-client` (the valve with its RPC client and its MQTT
 decoder), PostgreSQL is accessed over **R2DBC**
@@ -139,6 +143,9 @@ the shared `smart-home-sdk`, and errors are rendered through `cholewa-commons`.
   `internal.service.light` (`http://localhost:6012` in `local`, a port-forward to `light-service` -
   not reached, the automation of the circulation triggers nothing but its comfort windows, and those
   start nothing while the house is not known).
+- The water softener (HAS-397): the iQua account in `iqua-email` / `iqua-password` - no default, the service does
+  not start without them (`cholewa.required-properties`); with a real account a local run logs in to the cloud and reads
+  the softener every five minutes like the pod (one more login a run - mind the about 1000 calls a day of the account).
 - The sensor address comes from `shelly.sensor.uni.hot-water.host` / `.port`. When the sensor
   is unreachable the scheduled poll logs the error and skips the cycle — the service keeps
   running, it simply stores no new reading, so `status/temperature` keeps returning the last
@@ -163,6 +170,7 @@ the gateway, the writes are not authenticated - access is LAN / VPN only.
 | `GET` | `/home/water/circulation` | The circulation pump now — see below. |
 | `POST` | `/home/water/circulation?source=` | Start a run of the circulation pump — see below. |
 | `GET` | `/home/water/circulation/runs?from=&to=` | The runs the service started — see below. |
+| `GET` | `/home/water/softener` | The water softener now, from the iQua cloud — see below. |
 
 ## The water valve
 
@@ -401,6 +409,52 @@ return rarely reaches 35 °C within a run). The count is in memory.
 | `water.circulation.automation.quiet-from` / `quiet-to` | `23:30` / `05:30` | no automatic run between them, across midnight |
 | `water.circulation.automation.comfort-windows` | `06:00-08:00`, `19:00-23:30` | a run every minute of a window while the conditions hold (at most 6) |
 | `water.circulation.automation.min-rise` / `no-rise-runs` | `1.5` / `3` | the alert of a return that does not warm (0.5 - 10 °C, 2 - 10 runs) |
+
+## The water softener
+
+`GET /home/water/softener` answers the last read of the iQua cloud (HAS-397). The softener has no local API (scanned
+2026-11-05), so the service logs in to the cloud of the iQua application with the account of the house
+(`POST /auth/login`, a token of about 24 h held in memory, refreshed an hour before its end and after a `401`), lists
+the devices of the account at its start and once a day, and reads `GET /devices/{id}/detail-or-summary` every
+`water.softener.cloud.interval` (5 min) - one call of data a read. After three failed logins within 30 minutes it tries
+none for 30 minutes: the cloud blocks an account above about 1000 calls a day.
+
+```json
+{
+  "reachable": true,
+  "online": true,
+  "measuredAt": "2026-11-09T10:00:00",
+  "stale": false,
+  "water": {"usedTodayLitres": 312.4, "averageDailyLitres": 410.0, "treatedAvailableLitres": 1890.5,
+            "totalLitres": 152003.2, "flowLitresPerMinute": 0.0},
+  "salt": {"levelPercent": 45.0, "daysLeft": 38, "outOfSaltDate": "2026-12-17"},
+  "regeneration": {"daysSinceLast": 3, "lastAt": "2026-11-06", "total": 412},
+  "hardnessGpg": 14.0,
+  "hardnessMgCaco3": 239.7,
+  "daysInOperation": 950,
+  "signalDbm": -58,
+  "alerts": {"lowSalt": false, "leak": false, "excessiveWaterUse": false, "shutoffValve": false, "resin": false,
+             "error": false}
+}
+```
+
+- `reachable` - `false` after two missed reads in a row, at once when the account has no softener; left out until the
+  first read ended. A missed read keeps the last reading, `stale` says when it is older than two intervals.
+- `online` - the softener connected to the cloud, as the cloud says.
+- `water` - litres and l/min, as the cloud converts them. **The flow is the value the cloud last refreshed**: it moves
+  only while an application keeps a live session with the softener (the live flow is HAS-401).
+- `salt.levelPercent` - the per cent the iQua application shows, counted down by the softener from what was entered on its
+  panel, not measured; `outOfSaltDate`
+  and `regeneration.lastAt` are the days of the reading moved by `daysLeft` / `daysSinceLast`.
+- `hardnessGpg` - the hardness set on the softener (grains per gallon); `hardnessMgCaco3` the same x 17.12.
+- `alerts` - the flags of the softener; `leak` is its own watch of a continuous flow.
+- A value the cloud leaves out is left out - never a default. Before the first reading: `503 SOFTENER_UNAVAILABLE`.
+
+| Property | Default | Meaning |
+|---|---|---|
+| `water.softener.cloud.interval` | `PT5M` | the read of the softener (1 - 60 min, a bare number is minutes) |
+| `water.softener.serial-number` | none | one softener of several on the account; without it the first one |
+| `water.softener.cloud.base-url` | `https://api.myiquaapp.com/v1` | the API of the iQua application |
 
 ## Temperature history
 

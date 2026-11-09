@@ -5,6 +5,7 @@ import cloud.cholewa.commons.database.DatabaseProperties;
 import cloud.cholewa.shelly.http.ShellyGen1Client;
 import cloud.cholewa.shelly.codec.ShellyMqttDecoder;
 import cloud.cholewa.shelly.http.ShellyRpcClient;
+import cloud.cholewa.water.softener.SoftenerProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -12,6 +13,8 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.core.env.Environment;
 import org.springframework.scheduling.annotation.ScheduledAnnotationBeanPostProcessor;
 import org.springframework.test.context.ActiveProfiles;
+
+import java.net.URI;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -85,5 +88,20 @@ class WaterServiceApplicationTest {
         assertThat(environment.getProperty("notification.username")).isEqualTo("notification");
         assertThat(environment.getProperty("cholewa.required-properties[1].variable"))
             .isEqualTo("notification-rabbitmq-password");
+    }
+
+    //the water softener (HAS-397): the iQua account has no default - without it the service does not start
+    //(cholewa.required-properties); the test document points the cloud at an address nothing listens on
+    @Test
+    void should_require_the_iqua_account_and_keep_the_cloud_of_the_house_out_of_the_tests() {
+        final Environment environment = applicationContext.getEnvironment();
+        assertThat(environment.getProperty("cholewa.required-properties[2].property"))
+            .isEqualTo("water.softener.cloud.email");
+        assertThat(environment.getProperty("cholewa.required-properties[2].variable")).isEqualTo("iqua-email");
+        assertThat(environment.getProperty("cholewa.required-properties[3].property"))
+            .isEqualTo("water.softener.cloud.password");
+        assertThat(environment.getProperty("cholewa.required-properties[3].variable")).isEqualTo("iqua-password");
+        assertThat(applicationContext.getBean(SoftenerProperties.class).cloud().baseUrl())
+            .isEqualTo(URI.create("http://localhost:1"));
     }
 }

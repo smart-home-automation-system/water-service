@@ -18,7 +18,7 @@ public class ValveExceptionProcessor implements ExceptionProcessor {
         final ValveException exception = (ValveException) throwable;
         final String code = ErrorId.codeOf(exception.getError());
 
-        log.warn("Water valve request refused ({}, {}): {}", exception.getHttpStatus().value(), code,
+        log.warn("Water request refused ({}, {}): {}", exception.getHttpStatus().value(), code,
             exception.getMessage());
 
         return Errors.builder()

@@ -64,6 +64,11 @@ public class ValveException extends RuntimeException {
             "The tank is at " + tank + " C, below " + tankMin + " C");
     }
 
+    public static ValveException softenerUnavailable() {
+        return new ValveException(HttpStatus.SERVICE_UNAVAILABLE, WaterError.SOFTENER_UNAVAILABLE,
+            "The water softener has not been read from the iQua cloud yet");
+    }
+
     //status - what the valve answered, null when it did not answer
     public static ValveException deviceFailed(final Integer status) {
         return new ValveException(HttpStatus.BAD_GATEWAY, WaterError.DEVICE_FAILED, status == null
