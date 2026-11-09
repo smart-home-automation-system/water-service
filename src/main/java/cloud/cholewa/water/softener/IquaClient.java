@@ -48,6 +48,9 @@ public class IquaClient {
     static final Duration LIFETIME_WITHOUT_EXP = Duration.ofHours(12);
     private static final String ACCESS_TOKEN = "access_token";
     private static final String REFRESH_TOKEN = "refresh_token";
+    private static final String DEVICES = "/devices/";
+    private static final String AUTHORIZATION = "Authorization";
+    private static final String BEARER = "Bearer ";
 
     private final WebClient webClient;
     private final JsonMapper jsonMapper;
@@ -99,7 +102,7 @@ public class IquaClient {
     //the whole device with its properties; a summary alone - the account no longer has full access - is a failure, and so
     //is a device without its id or its properties ({} decodes into nulls - not the model)
     public Mono<IquaDevice> detail(final String deviceId) {
-        return get("/devices/" + deviceId + "/detail-or-summary", "the softener")
+        return get(DEVICES + deviceId + "/detail-or-summary", "the softener")
             .flatMap(root -> Mono.justOrEmpty(Optional.of(root.path("device"))
                     .filter(JsonNode::isObject)
                     .map(device -> device(device, "the softener")))
@@ -121,11 +124,11 @@ public class IquaClient {
     //not the model
     public Mono<IquaRegenerationPage> regenerations(final String deviceId, final int page, final int perPage) {
         return call(value -> webClient.get()
-                .uri(uri -> uri.path("/devices/" + deviceId + "/regeneration-events")
+                .uri(uri -> uri.path(DEVICES + deviceId + "/regeneration-events")
                     .queryParam("page", page)
                     .queryParam("per_page", perPage)
                     .build())
-                .header("Authorization", "Bearer " + value)
+                .header(AUTHORIZATION, BEARER + value)
                 .accept(MediaType.APPLICATION_JSON), "the regenerations")
             .flatMap(root -> Mono.justOrEmpty(Optional.of(root.path("data")).filter(JsonNode::isArray))
                 .switchIfEmpty(Mono.error(() -> new IquaException("The iQua cloud answered no list of the regenerations")))
@@ -138,11 +141,11 @@ public class IquaClient {
     //answer that is neither a list nor null is not the model
     public Mono<List<IquaAlert>> alerts(final String deviceId, final int perPage) {
         return call(value -> webClient.get()
-                .uri(uri -> uri.path("/devices/" + deviceId + "/alerts")
+                .uri(uri -> uri.path(DEVICES + deviceId + "/alerts")
                     .queryParam("page", 1)
                     .queryParam("per_page", perPage)
                     .build())
-                .header("Authorization", "Bearer " + value)
+                .header(AUTHORIZATION, BEARER + value)
                 .accept(MediaType.APPLICATION_JSON), "the alerts")
             .flatMap(root -> Mono.justOrEmpty(Optional.of(root.path("alerts")).filter(node -> node.isArray() || node.isNull()))
                 .switchIfEmpty(Mono.error(() -> new IquaException("The iQua cloud answered no list of the alerts")))
@@ -170,7 +173,7 @@ public class IquaClient {
     private Mono<JsonNode> get(final String path, final String what) {
         return call(value -> webClient.get()
             .uri(uri -> uri.path(path).build())
-            .header("Authorization", "Bearer " + value)
+            .header(AUTHORIZATION, BEARER + value)
             .accept(MediaType.APPLICATION_JSON), what);
     }
 

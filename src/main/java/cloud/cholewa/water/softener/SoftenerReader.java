@@ -152,12 +152,12 @@ public class SoftenerReader {
     //time the cloud changed it; regen_time_secs - the time of day of the regeneration in seconds. A property left out or
     //not a number tells nothing
     private void regeneration(final IquaDevice device, final Integer daysSince, final LocalDateTime at) {
-        final Map<String, IquaProperty> properties = device.properties();
-        final Optional<IquaProperty> status = Optional.ofNullable(properties.get("regen_status_enum"));
+        final Map<String, IquaProperty> reported = device.properties();
+        final Optional<IquaProperty> status = Optional.ofNullable(reported.get("regen_status_enum"));
         final LocalDateTime changedAt = status.map(IquaProperty::updatedAt)
             .flatMap(this::houseTime)
             .orElse(null);
-        final LocalTime scheduledAt = Optional.ofNullable(properties.get("regen_time_secs"))
+        final LocalTime scheduledAt = Optional.ofNullable(reported.get("regen_time_secs"))
             .flatMap(SoftenerReader::whole)
             .filter(seconds -> seconds >= 0)
             .map(seconds -> LocalTime.ofSecondOfDay(seconds % SECONDS_A_DAY))

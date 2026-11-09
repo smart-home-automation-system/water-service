@@ -42,10 +42,13 @@ public class SoftenerTracker {
         return regeneration.get();
     }
 
-    //status - regen_status_enum, null when the reading has none; changedAt - its updated_at in the time of the house;
-    //daysSince - days_since_last_regen. A status not 0 is a regeneration only on the day of one (daysSince 0 - the cloud sets
-    //it at the start, 02:01:52 on 2026-11-09; null when not told): a value that means something else - queued for the night,
-    //say - would otherwise hold the flow alarms of the evening for hours
+    /**
+     * The status of the regeneration from one reading (HAS-399). The status is regen_status_enum, null when the reading has
+     * none; changedAt is its updated_at in the time of the house; daysSince is days_since_last_regen. A status other than
+     * zero is a regeneration only on the day of one - the cloud sets the days to zero at the start, 02:01:52 on 2026-11-09 -
+     * or when the days are not told: a value that means something else, a queue for the night, would otherwise hold the
+     * flow alarms of the evening for hours.
+     */
     void regeneration(final Integer status, final Integer daysSince, final LocalDateTime changedAt,
                       final LocalTime scheduledAt, final LocalDateTime at) {
         final Boolean regenerating = status == null ? null : status != 0 && (daysSince == null || daysSince == 0);

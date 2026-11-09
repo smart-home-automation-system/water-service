@@ -49,10 +49,10 @@ public record Regeneration(LocalDateTime startedAt, LocalDateTime endedAt, Local
             return new Regeneration(startedAt, endedAt, schedule, checkedAt);
         }
         final LocalDateTime when = changedAt != null && !changedAt.isAfter(at) ? changedAt : at;
-        if (regenerating && (startedAt == null || endedAt != null && when.isAfter(endedAt))) {
+        if (Boolean.TRUE.equals(regenerating) && (startedAt == null || endedAt != null && when.isAfter(endedAt))) {
             return new Regeneration(when, null, schedule, at);
         }
-        if (!regenerating && startedAt != null && endedAt == null) {
+        if (Boolean.FALSE.equals(regenerating) && startedAt != null && endedAt == null) {
             return new Regeneration(startedAt, when.isBefore(startedAt) ? startedAt : when, schedule, at);
         }
         return new Regeneration(startedAt, endedAt, schedule, at);
