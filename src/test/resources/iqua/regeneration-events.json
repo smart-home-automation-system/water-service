@@ -1,0 +1,147 @@
+{
+  "page": 1,
+  "per_page": 20,
+  "total": 51,
+  "data": [
+    {
+      "id": "cb6b138b-d90d-45d6-8548-197c8b5dc051",
+      "start_time": "2026-11-09T01:01:51Z",
+      "end_time": "2026-11-09T03:03:46Z",
+      "device_start_time": "2026-11-09T02:01:51+01:00",
+      "device_start_time_display": "09/11/2026 02:01"
+    },
+    {
+      "id": "38a8e735-f92e-4ddd-a9ab-804ea2f199a1",
+      "start_time": "2026-11-03T01:01:52Z",
+      "end_time": "2026-11-03T03:03:46Z",
+      "device_start_time": "2026-11-03T02:01:52+01:00",
+      "device_start_time_display": "03/11/2026 02:01"
+    },
+    {
+      "id": "426430de-da38-4928-8120-1732d4f12552",
+      "start_time": "2026-10-28T01:01:43Z",
+      "end_time": "2026-10-28T03:03:38Z",
+      "device_start_time": "2026-10-28T02:01:43+01:00",
+      "device_start_time_display": "28/10/2026 02:01"
+    },
+    {
+      "id": "15f4ae48-4f42-4421-9cb0-3892980c08ea",
+      "start_time": "2026-10-23T00:01:52Z",
+      "end_time": "2026-10-23T02:03:47Z",
+      "device_start_time": "2026-10-23T02:01:52+02:00",
+      "device_start_time_display": "23/10/2026 02:01"
+    },
+    {
+      "id": "cae58fbc-1170-4254-94e7-2d8f8d5ed649",
+      "start_time": "2026-10-16T23:59:55Z",
+      "end_time": "2026-10-17T02:01:50Z",
+      "device_start_time": "2026-10-17T01:59:55+02:00",
+      "device_start_time_display": "17/10/2026 01:59"
+    },
+    {
+      "id": "d74bd079-cd0f-41a1-b151-5a695a1cbe60",
+      "start_time": "2026-10-11T00:00:26Z",
+      "end_time": "2026-10-11T02:02:19Z",
+      "device_start_time": "2026-10-11T02:00:26+02:00",
+      "device_start_time_display": "11/10/2026 02:00"
+    },
+    {
+      "id": "0ea60fde-18c1-4e71-a48b-14bc809fe9a5",
+      "start_time": "2026-10-05T00:00:29Z",
+      "end_time": "2026-10-05T02:02:22Z",
+      "device_start_time": "2026-10-05T02:00:29+02:00",
+      "device_start_time_display": "05/10/2026 02:00"
+    },
+    {
+      "id": "70f228a5-e841-4386-9b77-342aefc609e7",
+      "start_time": "2026-09-29T00:00:27Z",
+      "end_time": "2026-09-29T02:02:20Z",
+      "device_start_time": "2026-09-29T02:00:27+02:00",
+      "device_start_time_display": "29/09/2026 02:00"
+    },
+    {
+      "id": "e75208a3-b0fd-4779-9b6a-8087cc02eb5c",
+      "start_time": "2026-09-23T00:00:27Z",
+      "end_time": "2026-09-23T02:02:20Z",
+      "device_start_time": "2026-09-23T02:00:27+02:00",
+      "device_start_time_display": "23/09/2026 02:00"
+    },
+    {
+      "id": "bd6b9291-0910-4f40-8895-b89b225e99a9",
+      "start_time": "2026-09-17T00:00:28Z",
+      "end_time": "2026-09-17T02:02:21Z",
+      "device_start_time": "2026-09-17T02:00:28+02:00",
+      "device_start_time_display": "17/09/2026 02:00"
+    },
+    {
+      "id": "525a1c7c-3b9b-4371-8830-67553e7b01ba",
+      "start_time": "2026-09-12T00:00:23Z",
+      "end_time": "2026-09-12T02:02:16Z",
+      "device_start_time": "2026-09-12T02:00:23+02:00",
+      "device_start_time_display": "12/09/2026 02:00"
+    },
+    {
+      "id": "c18f3714-cf90-4487-8482-24752a7a825c",
+      "start_time": "2026-09-06T00:00:48Z",
+      "end_time": "2026-09-06T02:02:43Z",
+      "device_start_time": "2026-09-06T02:00:48+02:00",
+      "device_start_time_display": "06/09/2026 02:00"
+    },
+    {
+      "id": "005de059-964c-45f8-991b-fb76703fb7e5",
+      "start_time": "2026-08-31T00:00:33Z",
+      "end_time": "2026-08-31T02:02:27Z",
+      "device_start_time": "2026-08-31T02:00:33+02:00",
+      "device_start_time_display": "31/08/2026 02:00"
+    },
+    {
+      "id": "a9f2ef00-9248-474c-81e7-08592cf990f2",
+      "start_time": "2026-08-25T00:00:57Z",
+      "end_time": "2026-08-25T02:02:50Z",
+      "device_start_time": "2026-08-25T02:00:57+02:00",
+      "device_start_time_display": "25/08/2026 02:00"
+    },
+    {
+      "id": "154be8b4-68e7-4f25-8efe-ad08293bf86e",
+      "start_time": "2026-08-20T00:00:59Z",
+      "end_time": "2026-08-20T02:02:53Z",
+      "device_start_time": "2026-08-20T02:00:59+02:00",
+      "device_start_time_display": "20/08/2026 02:00"
+    },
+    {
+      "id": "9f54b64d-f690-45a3-823a-6b3aed3f71dd",
+      "start_time": "2026-08-15T00:00:49Z",
+      "end_time": "2026-08-15T02:02:43Z",
+      "device_start_time": "2026-08-15T02:00:49+02:00",
+      "device_start_time_display": "15/08/2026 02:00"
+    },
+    {
+      "id": "f795ba41-2d06-4e21-8fa8-e330d5486b35",
+      "start_time": "2026-08-06T00:01:09Z",
+      "end_time": "2026-08-06T02:03:03Z",
+      "device_start_time": "2026-08-06T02:01:09+02:00",
+      "device_start_time_display": "06/08/2026 02:01"
+    },
+    {
+      "id": "16cdf6ac-cd6d-4433-923a-ba355b53515a",
+      "start_time": "2026-07-28T00:00:07Z",
+      "end_time": "2026-07-28T02:02:00Z",
+      "device_start_time": "2026-07-28T02:00:07+02:00",
+      "device_start_time_display": "28/07/2026 02:00"
+    },
+    {
+      "id": "2551e1f5-a018-469b-8819-a6ecb0245c50",
+      "start_time": "2026-07-23T00:00:17Z",
+      "end_time": "2026-07-23T02:02:10Z",
+      "device_start_time": "2026-07-23T02:00:17+02:00",
+      "device_start_time_display": "23/07/2026 02:00"
+    },
+    {
+      "id": "03eeb624-0ce6-4b82-a4fd-b4bd4505f1fd",
+      "start_time": "2026-07-17T00:00:22Z",
+      "end_time": "2026-07-17T02:02:15Z",
+      "device_start_time": "2026-07-17T02:00:22+02:00",
+      "device_start_time_display": "17/07/2026 02:00"
+    }
+  ]
+}

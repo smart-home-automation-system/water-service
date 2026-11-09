@@ -3,6 +3,10 @@ package cloud.cholewa.water.api;
 import cloud.cholewa.water.config.ExceptionHandlerConfig;
 import cloud.cholewa.water.infrastructure.error.ValveException;
 import cloud.cholewa.water.model.SoftenerReply;
+import cloud.cholewa.water.model.SoftenerDayReply;
+import cloud.cholewa.water.model.SoftenerHistoryReply;
+import cloud.cholewa.water.model.SoftenerRegenerationReply;
+import cloud.cholewa.water.service.SoftenerHistoryService;
 import cloud.cholewa.water.service.SoftenerService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,7 +15,11 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.json.JsonCompareMode;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+
+import java.math.BigDecimal;
+import java.util.List;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -29,6 +37,75 @@ class SoftenerControllerTest {
 
     @MockitoBean
     private SoftenerService softenerService;
+
+    @MockitoBean
+    private SoftenerHistoryService softenerHistoryService;
+
+    //HAS-398: the history of a metric - the shape of the weather and the hot-water histories
+    @Test
+    void should_answer_the_history_of_a_metric() {
+        when(softenerHistoryService.history("saltLevel", "2026-11-08T00:00", "2026-11-09T00:00"))
+            .thenReturn(Mono.just(new SoftenerHistoryReply("saltLevel", LocalDateTime.of(2026, 11, 8, 0, 0),
+                LocalDateTime.of(2026, 11, 9, 0, 0), 300, List.of(new SoftenerHistoryReply.Point(
+                LocalDateTime.of(2026, 11, 8, 10, 0), new BigDecimal("25.00"), new BigDecimal("25.0"),
+                new BigDecimal("25.0"))))));
+
+        webTestClient.get()
+            .uri("/softener/history?metric=saltLevel&from=2026-11-08T00:00&to=2026-11-09T00:00")
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody().json("""
+                {"metric": "saltLevel", "from": "2026-11-08T00:00:00", "to": "2026-11-09T00:00:00", "bucketSeconds": 300,
+                 "points": [{"at": "2026-11-08T10:00:00", "avg": 25.00, "min": 25.0, "max": 25.0}]}
+                """, JsonCompareMode.STRICT);
+    }
+
+    @Test
+    void should_refuse_an_unknown_metric_with_its_code() {
+        when(softenerHistoryService.history("salt", null, null))
+            .thenReturn(Mono.error(ValveException.unknownMetric("salt")));
+
+        webTestClient.get()
+            .uri("/softener/history?metric=salt")
+            .exchange()
+            .expectStatus().isBadRequest()
+            .expectBody()
+            .jsonPath("$.errors[0].code").isEqualTo("UNKNOWN_METRIC")
+            .jsonPath("$.errors[0].details").isEqualTo("There is no metric 'salt' of the softener");
+    }
+
+    @Test
+    void should_answer_the_days_and_the_regenerations() {
+        when(softenerHistoryService.days("2026-11-01", null)).thenReturn(Flux.just(
+            new SoftenerDayReply(LocalDate.of(2026, 11, 8), new BigDecimal("310.0"))));
+        when(softenerHistoryService.regenerations(null, null)).thenReturn(Flux.just(
+            new SoftenerRegenerationReply(LocalDateTime.of(2026, 11, 9, 2, 0), null, null, true),
+            new SoftenerRegenerationReply(LocalDateTime.of(2026, 11, 6, 2, 0), LocalDateTime.of(2026, 11, 6, 4, 0),
+                LocalDateTime.of(2026, 11, 6, 2, 0), false)));
+
+        webTestClient.get().uri("/softener/days?from=2026-11-01").exchange()
+            .expectStatus().isOk()
+            .expectBody().json("""
+                [{"day": "2026-11-08", "litres": 310.0}]
+                """, JsonCompareMode.STRICT);
+        webTestClient.get().uri("/softener/regenerations").exchange()
+            .expectStatus().isOk()
+            .expectBody().json("""
+                [{"startedAt": "2026-11-09T02:00:00", "running": true},
+                 {"startedAt": "2026-11-06T02:00:00", "endedAt": "2026-11-06T04:00:00",
+                  "deviceStartedAt": "2026-11-06T02:00:00", "running": false}]
+                """, JsonCompareMode.STRICT);
+    }
+
+    @Test
+    void should_refuse_a_range_with_its_code() {
+        when(softenerHistoryService.days("2026-13-01", null))
+            .thenReturn(Flux.error(ValveException.invalidRange("from must be YYYY-MM-DD, not '2026-13-01'")));
+
+        webTestClient.get().uri("/softener/days?from=2026-13-01").exchange()
+            .expectStatus().isBadRequest()
+            .expectBody().jsonPath("$.errors[0].code").isEqualTo("INVALID_RANGE");
+    }
 
     @Test
     void should_answer_the_softener() {

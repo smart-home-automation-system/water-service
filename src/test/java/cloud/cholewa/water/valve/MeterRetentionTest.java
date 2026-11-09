@@ -1,6 +1,8 @@
 package cloud.cholewa.water.valve;
 
+import cloud.cholewa.water.database.repository.SoftenerRepository;
 import cloud.cholewa.water.database.repository.WaterMeterRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -24,8 +26,9 @@ class MeterRetentionTest {
     private static final Instant NIGHT = Instant.parse("2026-11-05T02:25:00Z");
 
     private final WaterMeterRepository repository = mock(WaterMeterRepository.class);
+    private final SoftenerRepository softener = mock(SoftenerRepository.class);
     private final AtomicReference<Instant> now = new AtomicReference<>(NIGHT);
-    private final MeterRetention sut = new MeterRetention(repository, new MeterRetentionProperties(Duration.ofDays(730)),
+    private final MeterRetention sut = new MeterRetention(repository, softener, new MeterRetentionProperties(Duration.ofDays(730)),
         new Clock() {
             @Override
             public ZoneId getZone() {
@@ -42,6 +45,25 @@ class MeterRetentionTest {
                 return now.get();
             }
         });
+
+    @BeforeEach
+    void setUp() {
+        when(softener.deleteReadingsBefore(any())).thenReturn(Mono.just(0L));
+        when(softener.deleteRegenerationsBefore(any())).thenReturn(Mono.just(0L));
+    }
+
+    //HAS-398: the readings and the regenerations of the softener go with the same bound, each table on its own - a failed
+    //delete of one never keeps the others
+    @Test
+    void should_delete_the_softener_rows_older_than_the_retention_too() {
+        when(repository.deleteReadingsBefore(any())).thenReturn(Mono.error(new IllegalStateException("database down")));
+        when(softener.deleteReadingsBefore(any())).thenReturn(Mono.error(new IllegalStateException("database down")));
+
+        sut.purge().as(StepVerifier::create).verifyComplete();
+
+        verify(softener).deleteReadingsBefore(LocalDateTime.of(2024, 11, 5, 3, 25));
+        verify(softener).deleteRegenerationsBefore(LocalDateTime.of(2024, 11, 5, 3, 25));
+    }
 
     @Test
     void should_delete_the_readings_older_than_the_retention() {
