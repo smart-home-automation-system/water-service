@@ -130,7 +130,7 @@ public class IquaClient {
             .flatMap(root -> Mono.justOrEmpty(Optional.of(root.path("data")).filter(JsonNode::isArray))
                 .switchIfEmpty(Mono.error(() -> new IquaException("The iQua cloud answered no list of the regenerations")))
                 .map(data -> new IquaRegenerationPage(StreamSupport.stream(data.spliterator(), false)
-                    .map(event -> regeneration(event))
+                    .map(this::regeneration)
                     .toList(), root.path("total").asLong(0))));
     }
 

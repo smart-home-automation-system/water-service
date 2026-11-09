@@ -15,8 +15,8 @@ import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-//The water softener from the iQua cloud (HAS-397) and what the house keeps of it (HAS-398), routed by the gateway under
-///home/water/** - no gateway release. The parameters are read as text, so that a missing or wrong one is INVALID_RANGE /
+//The water softener from the iQua cloud (HAS-397) and what the house keeps of it (HAS-398), routed by the gateway
+//under the paths of water - no gateway release. The parameters are read as text, so that a missing or wrong one is INVALID_RANGE /
 //UNKNOWN_METRIC with its code - a typed parameter would be refused by WebFlux without one
 @Slf4j
 @RestController
