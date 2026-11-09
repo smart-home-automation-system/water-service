@@ -9,7 +9,7 @@ the consumption by day, week, month and year on `GET /home/water/consumption`; s
 the waterworks compared with what the house measured, and the daily history imported from the Shelly cloud; since HAS-319
 the alarms of the mains, the valve and frost, and since HAS-320 those of the flow - high, continuous, in an empty house; since
 HAS-404 the circulation pump of the hot water (relay 1 of the Shelly Uni): its state and a manual start, and since HAS-405 its
-automation (the motion and the lights of the bathrooms, comfort windows); since HAS-397 the water softener, read from the iQua cloud, and since HAS-398 its history, days and regenerations.
+automation (the motion and the lights of the bathrooms, comfort windows); since HAS-397 the water softener, read from the iQua cloud, and since HAS-398 its history, days and regenerations, since HAS-399 its alerts - and its regeneration no longer raises the flow alarms.
 
 Part of the smart-home-automation-system organization — org-wide conventions, the
 repository map and working rules come from the workspace-level context
@@ -17,7 +17,7 @@ repository map and working rules come from the workspace-level context
 repository themselves; Claude's default role here is analysis, code review and security
 review - the owner had Claude implement the readings of the water valve (HAS-316), the consumption
 (HAS-317), the bills (HAS-318), the alarms (HAS-319, HAS-320), the command of the valve (HAS-321) and the circulation pump
-(HAS-404, HAS-405) and the water softener (HAS-397, HAS-398) and reviews them
+(HAS-404, HAS-405) and the water softener (HAS-397, HAS-398, HAS-399) and reviews them
 in IntelliJ.
 
 ## Role in the system
@@ -388,6 +388,42 @@ in IntelliJ.
       regenerations default to the last 30 days up to today, both days included. Each read cut off after 10 s.
     - **Retention**: `MeterRetention` (03:25) deletes both tables with `water.meter.retention` (730 days), one statement a
       table, each with its own WARN; never the latest reading.
+  - **The alerts of the softener** (HAS-399, `SoftenerAlarm`, `SoftenerAlarmRules`, `SoftenerAlarmMonitor`, `SoftenerWatch`,
+    `SoftenerMessages`, V10 - the kinds of `water_alert`) - what is easy to break:
+    - **A monitor of its own beside `AlarmMonitor`**, every minute (bounded at 50 s), on the newest reading of `SoftenerTracker`;
+      both read the open rows of `water_alert` and **each takes only its own kinds** (`AlarmMonitor.open` skips the kinds of
+      `SoftenerAlarm` - before, an unknown kind was a WARN). The rows, the publish-then-hold and the retries are those of
+      `AlarmMonitor` (`SoftenerWatch` the copy of `AlarmWatch` for its enum).
+    - **Decided by `SoftenerAlarmRules`** (no I/O): a flag true in the reading opens at that reading, false closes at it; a flag
+      left out, no reading, or a reading with `online: false` decides nothing (the flags of a softener off Wi-Fi are what it said
+      before). Offline: no reading online for `water.softener.offline-after` (PT30M) since the last one - the start of the pod
+      before the first - opens where it was last heard; the cloud refusing the account (`LoginGuard`) is offline too.
+    - **Levels**: leak, shutoff valve, resin, error are `publishAlert` (error); the salt, the excessive use and offline are
+      published at warn through `publishReminder` - `NotificationPublisher` has no warn alert. The salt is reminded once a day
+      (`SoftenerAlarmRules.DAILY`), the rest every `water.alarm.reminder-every`. A notice is cut off after 10 s (the task asked 30 s
+      - seven notices would not fit in the bound of the pass, as in `AlarmMonitor`).
+    - **`GET /softener/alerts`** (`SoftenerAlertService`): `/devices/{id}/alerts?page=1&per_page=20` of the cloud, the list
+      `alerts` of its OpenAPI (nullable - no alerts), kept for one `cloud.interval`, requests at once share one read; a failure is
+      `502 DEVICE_FAILED` with a fixed text, kept for the interval too (a dashboard polling while the cloud fails would
+      otherwise call it at every poll, past the about 1000 calls a day of the account). **The shape of a real answer is not seen yet** - the account had no
+      alert on 2026-11-09; checked against the OpenAPI only.
+  - **The regeneration and the flow alarms** (HAS-399, `Regeneration`, `SoftenerTracker.regeneration`, `FlowRules`) - the
+    softener takes about 0.5 l/min from the mains for two hours (2026-11-09 02:01 - 04:04, the regeneration 02:01:51 - 04:03:46),
+    which raised the continuous flow:
+    - **Seen from `regen_status_enum`** (not 0 - regenerating) dated by its `updated_at` (the time the cloud changed it, house time);
+      `regen_time_secs` is the time of day of the regeneration (7200 = 02:00 - `current_time_secs` 7340 was written at 02:04 of
+      the house, so these are seconds of the day of the clock of the softener, not a length). **Which value a regeneration has is
+      not seen** (0 since its end): any other is taken for one **only on the day of a regeneration** (`days_since_last_regen`
+      0 - the cloud sets it at the start; another value, a queue for the night, would hold the flow alarms of the evening for
+      hours), every start and end is an INFO with the value - check it after the next night regeneration (about 6 days apart,
+      the last on 2026-11-09).
+    - **`Regeneration.flowStart`** (no I/O): a run that started from `LEAD` (10 min) before the regeneration was seen to its end is
+      held while it goes on (`LONGEST` 3 h at most) and judged from its end once over; a run that starts 5 min before to 20 min
+      after the scheduled time waits for a reading `CONFIRM` (5 min) after its start, `HOLD_AT_MOST` 20 min - the empty house
+      would be raised two minutes after the start, before the cloud says anything.
+    - **`FlowRules`**: the continuous flow and the empty house only; an excused run opens only when the water runs on after the
+      regeneration - above for `continuous-after` since its end, or for longer than `continuous-pause` in the empty house - and the
+      episode opens at the end. The high flow is never excused. `AlarmMonitor` hands `SoftenerTracker.regeneration()` in.
   - **Rehearsed** (2026-11-04): the released 0.6.1 image applied V1-V2 on a throwaway PostgreSQL with SSL (a user
     with `USAGE, CREATE` on `public` only), the new jar V3 with the real valve and the registry through a
     port-forward, no broker: `/valve` answered the valve within 10 s, a row of the counter a change, the same

@@ -372,6 +372,48 @@ class IquaClientTest {
             .verify();
     }
 
+    //HAS-399: the first page of the alerts, the shape of GetDeviceAlertsOutputBody of the OpenAPI of the cloud
+    @Test
+    void should_read_the_alerts_of_the_softener() throws InterruptedException {
+        server.enqueue(token(first(), "refresh-1"));
+        server.enqueue(json("""
+            {"alerts":[{"id":"a1","type":"low_salt","title":"Low salt","message":"Add salt","details":"",
+              "timestamp":"2026-11-09T07:00:00Z","display_time":"08:00","level":"warning","is_read":false}],
+             "page":1,"per_page":20,"total":1}"""));
+
+        client.alerts("dev-1", 20).as(StepVerifier::create)
+            .expectNext(List.of(new IquaAlert("a1", "low_salt", "Low salt", "Add salt", "warning",
+                "2026-11-09T07:00:00Z", false)))
+            .verifyComplete();
+
+        server.takeRequest();
+        final RecordedRequest read = server.takeRequest();
+        assertThat(read.getUrl().encodedPath()).isEqualTo("/v1/devices/dev-1/alerts");
+        assertThat(read.getUrl().queryParameter("page")).isEqualTo("1");
+        assertThat(read.getUrl().queryParameter("per_page")).isEqualTo("20");
+    }
+
+    //the list is nullable in the OpenAPI: no alerts
+    @Test
+    void should_read_no_alerts_from_a_null_list() {
+        server.enqueue(token(first(), "refresh-1"));
+        server.enqueue(json("{\"alerts\":null,\"page\":1,\"per_page\":20,\"total\":0}"));
+
+        client.alerts("dev-1", 20).as(StepVerifier::create)
+            .expectNext(List.of())
+            .verifyComplete();
+    }
+
+    @Test
+    void should_fail_on_alerts_that_are_not_the_model() {
+        server.enqueue(token(first(), "refresh-1"));
+        server.enqueue(json("{\"page\":1}"));
+
+        client.alerts("dev-1", 20).as(StepVerifier::create)
+            .expectErrorMessage("The iQua cloud answered no list of the alerts")
+            .verify();
+    }
+
     @Test
     void should_fail_when_the_cloud_does_not_answer_in_time() {
         server.enqueue(token(first(), "refresh-1"));

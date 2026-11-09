@@ -6,13 +6,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
+import tools.jackson.databind.JsonNode;
 
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -35,6 +38,7 @@ public class SoftenerReader {
     static final Duration LIST_EVERY = Duration.ofDays(1);
     private static final Set<Integer> GONE = Set.of(403, 404);
     private static final String WHAT = "iQua cloud";
+    private static final long SECONDS_A_DAY = 86_400;
 
     private final IquaClient iquaClient;
     private final SoftenerTracker softenerTracker;
@@ -131,6 +135,7 @@ public class SoftenerReader {
                 final SoftenerReading reading = SoftenerReading.of(device);
                 final LocalDateTime at = LocalDateTime.now(clock).truncatedTo(ChronoUnit.SECONDS);
                 softenerTracker.read(reading, at, clock.instant());
+                regeneration(device, reading.daysSinceRegeneration(), at);
                 failureLog.succeeded(WHAT);
                 return new Read(reading, at);
             })
@@ -141,6 +146,38 @@ public class SoftenerReader {
     }
 
     private record Read(SoftenerReading reading, LocalDateTime at) {
+    }
+
+    //the regeneration (HAS-399): regen_status_enum - 0 while the softener does not regenerate - with its updated_at, the
+    //time the cloud changed it; regen_time_secs - the time of day of the regeneration in seconds. A property left out or
+    //not a number tells nothing
+    private void regeneration(final IquaDevice device, final Integer daysSince, final LocalDateTime at) {
+        final Map<String, IquaProperty> reported = device.properties();
+        final Optional<IquaProperty> status = Optional.ofNullable(reported.get("regen_status_enum"));
+        final LocalDateTime changedAt = status.map(IquaProperty::updatedAt)
+            .flatMap(this::houseTime)
+            .orElse(null);
+        final LocalTime scheduledAt = Optional.ofNullable(reported.get("regen_time_secs"))
+            .flatMap(SoftenerReader::whole)
+            .filter(seconds -> seconds >= 0)
+            .map(seconds -> LocalTime.ofSecondOfDay(seconds % SECONDS_A_DAY))
+            .orElse(null);
+        softenerTracker.regeneration(status.flatMap(SoftenerReader::whole).map(Long::intValue).orElse(null), daysSince,
+            changedAt, scheduledAt, at);
+    }
+
+    private static Optional<Long> whole(final IquaProperty property) {
+        return Optional.ofNullable(property.value())
+            .filter(JsonNode::isIntegralNumber)
+            .map(JsonNode::asLong);
+    }
+
+    private Optional<LocalDateTime> houseTime(final String instant) {
+        try {
+            return Optional.of(LocalDateTime.ofInstant(Instant.parse(instant), clock.getZone()).truncatedTo(ChronoUnit.SECONDS));
+        } catch (final RuntimeException notInstant) {
+            return Optional.empty();
+        }
     }
 
     private Mono<Void> store(final Read read) {

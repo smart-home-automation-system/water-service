@@ -2,10 +2,12 @@ package cloud.cholewa.water.api;
 
 import cloud.cholewa.water.config.ExceptionHandlerConfig;
 import cloud.cholewa.water.infrastructure.error.ValveException;
+import cloud.cholewa.water.model.SoftenerAlertReply;
 import cloud.cholewa.water.model.SoftenerReply;
 import cloud.cholewa.water.model.SoftenerDayReply;
 import cloud.cholewa.water.model.SoftenerHistoryReply;
 import cloud.cholewa.water.model.SoftenerRegenerationReply;
+import cloud.cholewa.water.service.SoftenerAlertService;
 import cloud.cholewa.water.service.SoftenerHistoryService;
 import cloud.cholewa.water.service.SoftenerService;
 import org.junit.jupiter.api.Test;
@@ -40,6 +42,9 @@ class SoftenerControllerTest {
 
     @MockitoBean
     private SoftenerHistoryService softenerHistoryService;
+
+    @MockitoBean
+    private SoftenerAlertService softenerAlertService;
 
     //HAS-398: the history of a metric - the shape of the weather and the hot-water histories
     @Test
@@ -173,5 +178,36 @@ class SoftenerControllerTest {
             .expectBody()
             .jsonPath("$.errors[0].code").isEqualTo("SOFTENER_UNAVAILABLE")
             .jsonPath("$.errors[0].message").isEqualTo("Water softener unavailable");
+    }
+
+    //HAS-399: the alerts of the iQua cloud for the alerts card of the dashboard, a field it left out left out
+    @Test
+    void should_answer_the_alerts_of_the_cloud() {
+        when(softenerAlertService.alerts()).thenReturn(Mono.just(List.of(
+            new SoftenerAlertReply("a1", "low_salt", "Low salt", "Add salt", "warning",
+                LocalDateTime.of(2026, 11, 9, 8, 0), false),
+            new SoftenerAlertReply("a0", null, "Service", null, null, null, true))));
+
+        webTestClient.get()
+            .uri("/softener/alerts")
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody().json("""
+                [{"id": "a1", "type": "low_salt", "title": "Low salt", "message": "Add salt", "level": "warning",
+                  "at": "2026-11-09T08:00:00", "read": false},
+                 {"id": "a0", "title": "Service", "read": true}]
+                """, JsonCompareMode.STRICT);
+    }
+
+    @Test
+    void should_answer_502_when_the_cloud_gave_no_alerts() {
+        when(softenerAlertService.alerts()).thenReturn(Mono.error(ValveException.softenerCloudFailed()));
+
+        webTestClient.get()
+            .uri("/softener/alerts")
+            .exchange()
+            .expectStatus().isEqualTo(502)
+            .expectBody()
+            .jsonPath("$.errors[0].code").isEqualTo("DEVICE_FAILED");
     }
 }

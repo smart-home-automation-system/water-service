@@ -9,6 +9,7 @@ import cloud.cholewa.water.infrastructure.error.ValveException;
 import cloud.cholewa.water.presence.HouseOccupancy;
 import cloud.cholewa.water.presence.PresenceClient;
 import cloud.cholewa.water.registry.ValveRegistry;
+import cloud.cholewa.water.softener.SoftenerTracker;
 import cloud.cholewa.water.valve.Reported;
 import cloud.cholewa.water.valve.ValveProperties;
 import cloud.cholewa.water.valve.ValveState;
@@ -46,7 +47,8 @@ import java.util.stream.Stream;
 //device and the broker go down together, so an alert that never got through is said by the return.
 //With water.flow.close-on-alarm (off by default, HAS-321) the first alert of a continuous flow or of the empty house
 //closes the valve first (source rule) and says so; an alert sent again keeps what its first said, the valve is never
-//commanded twice for one episode. The high flow never closes it
+//commanded twice for one episode. The high flow never closes it.
+//The regeneration of the softener (HAS-399, SoftenerTracker) excuses the flow it takes from the mains - FlowRules
 @Slf4j
 @Component
 public class AlarmMonitor {
@@ -62,6 +64,7 @@ public class AlarmMonitor {
     private final ValveTracker valveTracker;
     private final FlowTrack flowTrack;
     private final PresenceClient presenceClient;
+    private final SoftenerTracker softenerTracker;
     private final ValveCommandService valveCommandService;
     private final WaterAlertRepository waterAlertRepository;
     private final NotificationPublisher notificationPublisher;
@@ -83,6 +86,7 @@ public class AlarmMonitor {
         final ValveTracker valveTracker,
         final FlowTrack flowTrack,
         final PresenceClient presenceClient,
+        final SoftenerTracker softenerTracker,
         final ValveCommandService valveCommandService,
         final WaterAlertRepository waterAlertRepository,
         final NotificationPublisher notificationPublisher,
@@ -95,6 +99,7 @@ public class AlarmMonitor {
         this.valveTracker = valveTracker;
         this.flowTrack = flowTrack;
         this.presenceClient = presenceClient;
+        this.softenerTracker = softenerTracker;
         this.valveCommandService = valveCommandService;
         this.waterAlertRepository = waterAlertRepository;
         this.notificationPublisher = notificationPublisher;
@@ -130,12 +135,15 @@ public class AlarmMonitor {
                     failure.toString()))));
     }
 
+    //the episodes of the softener (HAS-399) are SoftenerAlarmMonitor's
     private static Map<Alarm, WaterAlertEntity> open(final List<WaterAlertEntity> rows) {
         final Map<Alarm, WaterAlertEntity> open = new EnumMap<>(Alarm.class);
-        rows.forEach(row -> Alarm.of(row.kind()).ifPresentOrElse(alarm -> {
-            log.info("The {} alarm of the water valve since {} is still open", row.kind(), row.openedAt());
-            open.put(alarm, row);
-        }, () -> log.warn("An open alarm of the water valve this version does not know: {}", row.kind())));
+        rows.stream()
+            .filter(row -> SoftenerAlarm.of(row.kind()).isEmpty())
+            .forEach(row -> Alarm.of(row.kind()).ifPresentOrElse(alarm -> {
+                log.info("The {} alarm of the water valve since {} is still open", row.kind(), row.openedAt());
+                open.put(alarm, row);
+            }, () -> log.warn("An open alarm of the water valve this version does not know: {}", row.kind())));
         return open;
     }
 
@@ -209,7 +217,8 @@ public class AlarmMonitor {
         }
         //boxed on purpose: a double in one branch would unbox the null of the other
         final Double litres = rate != null ? Double.valueOf(ValveTracker.litres(rate)) : lastMinute;
-        return new FlowRules.Readings(flowTrack.current(), litres != null, litres, known);
+        return new FlowRules.Readings(flowTrack.current(), litres != null, litres, known,
+            softenerTracker.regeneration());
     }
 
     private static Double valueOf(final Reported<Double> reported) {

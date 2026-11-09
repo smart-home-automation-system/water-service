@@ -40,7 +40,7 @@ public record SoftenerReading(
         "total_outlet_water_gals", "current_water_flow_gpm", "out_of_salt_estimate_days",
         "days_since_last_regen", "total_regens", "hardness_grains", "days_in_operation", "rf_signal_strength_dbm",
         "low_salt_alert", "flow_monitor_alert", "excessive_water_use_alert", "water_shutoff_valve_alert", "resin_alert",
-        "error_code_alert", "_internal_is_online");
+        "error_code_alert", "_internal_is_online", "regen_status_enum", "regen_time_secs");
 
     //leak - flow_monitor_alert, the continuous flow the softener itself watches
     public record Alerts(

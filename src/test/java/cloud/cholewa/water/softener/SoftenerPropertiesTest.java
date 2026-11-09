@@ -37,6 +37,7 @@ class SoftenerPropertiesTest {
             assertThat(properties.cloud().baseUrl()).isEqualTo(URI.create("https://api.myiquaapp.com/v1"));
             assertThat(properties.cloud().email()).isEqualTo("owner@example.com");
             assertThat(properties.cloud().interval()).isEqualTo(Duration.ofMinutes(5));
+            assertThat(properties.offlineAfter()).isEqualTo(Duration.ofMinutes(30));
         });
     }
 
@@ -49,9 +50,19 @@ class SoftenerPropertiesTest {
                 .isEqualTo(Duration.ofMinutes(15)));
     }
 
+    //HAS-399: a bare number of the offline alarm is minutes too
+    @Test
+    void should_read_a_bare_number_of_the_offline_alarm_as_minutes() {
+        contextRunner
+            .withPropertyValues("water.softener.offline-after=45")
+            .run(context -> assertThat(context.getBean(SoftenerProperties.class).offlineAfter())
+                .isEqualTo(Duration.ofMinutes(45)));
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"water.softener.cloud.interval=PT30S", "water.softener.cloud.interval=PT61M",
-        "water.softener.cloud.email=", "water.softener.cloud.password="})
+        "water.softener.cloud.email=", "water.softener.cloud.password=", "water.softener.offline-after=PT4M",
+        "water.softener.offline-after=PT25H"})
     void should_not_start_with_a_value_out_of_bounds(final String value) {
         contextRunner
             .withPropertyValues(value)

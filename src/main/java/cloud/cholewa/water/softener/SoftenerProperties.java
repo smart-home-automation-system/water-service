@@ -18,12 +18,15 @@ import java.time.temporal.ChronoUnit;
 //cloud.baseUrl - the API of the iQua application (https://api.myiquaapp.com/v1)
 //cloud.email, cloud.password - the iQua account (secret water, keys iqua-email / iqua-password, no default)
 //cloud.interval - the read of the softener (PT5M; 1 - 60 min, a bare number is minutes - the cloud blocks an account above
-//about 1000 calls a day). Pinned by SoftenerPropertiesTest
+//about 1000 calls a day)
+//offlineAfter - no reading of the softener online for this long is the offline alarm (PT30M; 5 min - 24 h, a bare number
+//is minutes - HAS-399; the softener drops off Wi-Fi for minutes on its own). Pinned by SoftenerPropertiesTest
 @Validated
 @ConfigurationProperties(prefix = "water.softener")
 public record SoftenerProperties(
     String serialNumber,
-    @NotNull @Valid Cloud cloud
+    @NotNull @Valid Cloud cloud,
+    @NotNull @DurationUnit(ChronoUnit.MINUTES) @DurationMin(minutes = 5) @DurationMax(hours = 24) Duration offlineAfter
 ) {
 
     public record Cloud(

@@ -1,6 +1,7 @@
 package cloud.cholewa.water.alarm;
 
 import cloud.cholewa.water.database.model.WaterAlertEntity;
+import cloud.cholewa.water.softener.Regeneration;
 import cloud.cholewa.water.presence.HouseOccupancy;
 import cloud.cholewa.water.valve.ValveProperties;
 import org.junit.jupiter.api.BeforeEach;
@@ -8,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 
@@ -27,6 +29,7 @@ class FlowRulesTest {
     private FlowTrack track;
     private AlarmWatch watch;
     private House house;
+    private Regeneration regeneration = Regeneration.NONE;
 
     @BeforeEach
     void setUp() {
@@ -260,6 +263,73 @@ class FlowRulesTest {
                 + "the alert did not get through."));
     }
 
+    //HAS-399: the regeneration of the softener takes about 0.5 l/min for two hours - no continuous flow while it lasts
+    @Test
+    void should_not_alert_a_continuous_flow_while_the_softener_regenerates() {
+        regeneration = Regeneration.NONE.next(true, T0, LocalTime.of(10, 0), T0.plusMinutes(3));
+
+        assertThat(flowing(0.6, 0, 119)).isEmpty();
+    }
+
+    //the water running on for continuous-after after the regeneration is a continuous flow - from the end
+    @Test
+    void should_alert_a_continuous_flow_that_runs_on_after_the_regeneration() {
+        regeneration = Regeneration.NONE.next(true, T0, LocalTime.of(10, 0), T0.plusMinutes(3));
+        flowing(0.6, 0, 119);
+        regeneration = regeneration.next(false, T0.plusMinutes(120), LocalTime.of(10, 0), T0.plusMinutes(122));
+
+        assertThat(flowing(0.6, 120, 150)).isEmpty();
+        assertThat(flowing(0.6, 151, 151)).singleElement().satisfies(notice -> {
+            assertThat(notice.alarm()).isEqualTo(Alarm.CONTINUOUS_FLOW);
+            assertThat(notice.row().openedAt()).isEqualTo(T0.plusMinutes(120));
+        });
+    }
+
+    //the flow of the regeneration that stops with it is never told
+    @Test
+    void should_never_alert_the_flow_that_stopped_with_the_regeneration() {
+        regeneration = Regeneration.NONE.next(true, T0, LocalTime.of(10, 0), T0.plusMinutes(3));
+        flowing(0.6, 0, 120);
+        regeneration = regeneration.next(false, T0.plusMinutes(120), LocalTime.of(10, 0), T0.plusMinutes(122));
+
+        assertThat(flowing(0.0, 121, 180)).isEmpty();
+    }
+
+    //the empty house: a flow at the time of the regeneration waits for the cloud; told no regeneration, it is the alarm
+    //of the empty house from the start of the flow
+    @Test
+    void should_hold_a_flow_of_the_empty_house_until_the_cloud_tells_of_the_regeneration() {
+        house = new House(HouseOccupancy.EMPTY, T0.minusHours(1));
+        regeneration = Regeneration.NONE.next(false, null, LocalTime.of(10, 0), T0.minusMinutes(1));
+
+        assertThat(flowing(0.6, 0, 4)).isEmpty();
+        regeneration = regeneration.next(false, null, LocalTime.of(10, 0), T0.plusMinutes(5));
+
+        assertThat(flowing(0.6, 5, 5)).singleElement().satisfies(notice -> {
+            assertThat(notice.alarm()).isEqualTo(Alarm.EMPTY_HOUSE_FLOW);
+            assertThat(notice.row().openedAt()).isEqualTo(T0);
+        });
+    }
+
+    //the empty house while the softener regenerates: nothing - the regeneration took the water
+    @Test
+    void should_not_alert_the_empty_house_for_the_flow_of_the_regeneration() {
+        house = new House(HouseOccupancy.EMPTY, T0.minusHours(1));
+        regeneration = Regeneration.NONE.next(false, null, LocalTime.of(10, 0), T0.minusMinutes(1));
+        flowing(0.6, 0, 4);
+        regeneration = regeneration.next(true, T0.plusMinutes(1), LocalTime.of(10, 0), T0.plusMinutes(5));
+
+        assertThat(flowing(0.6, 5, 119)).isEmpty();
+    }
+
+    //the high flow is never excused - the regeneration takes far less
+    @Test
+    void should_alert_a_high_flow_while_the_softener_regenerates() {
+        regeneration = Regeneration.NONE.next(true, T0, LocalTime.of(10, 0), T0.plusMinutes(1));
+
+        assertThat(flowing(30, 0, 3)).extracting(AlarmRules.Notice::alarm).containsExactly(Alarm.HIGH_FLOW);
+    }
+
     //the flow reported at the start of each minute and a pass after it
     private List<AlarmRules.Notice> flowing(final double litres, final int first, final int last) {
         final List<AlarmRules.Notice> notices = new java.util.ArrayList<>();
@@ -294,7 +364,8 @@ class FlowRulesTest {
 
     private AlarmRules.Decision decide(final int minute, final boolean known) {
         final FlowTrack.Flows flows = track.current();
-        return FlowRules.decide(watch, new FlowRules.Readings(flows, known, known ? flows.litres() : null, house),
+        return FlowRules.decide(watch, new FlowRules.Readings(flows, known, known ? flows.litres() : null, house,
+            regeneration),
             T0.plusMinutes(minute), FLOW, ALARM);
     }
 }
