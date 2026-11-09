@@ -55,7 +55,7 @@ public class SoftenerCommandService {
 
     //word - what the house calls it in the answer; action - the action of the cloud within the function regenerate
     enum Command {
-        NOW("regenerate now", "regenerate"),
+        NOW("regenerate now", FUNCTION),
         TONIGHT("regenerate tonight", "schedule"),
         CANCEL("cancel the scheduled regeneration", "cancel");
 
