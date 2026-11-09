@@ -137,6 +137,23 @@ public class IquaClient {
                     .toList(), root.path("total").asLong(0))));
     }
 
+    //a command of a device (HAS-400) - DeviceCommandInputBody {function, action} of its OpenAPI, the pairs the device offers
+    //in the actions of its detail (iqua/detail-scheduled.json); the answer DeviceCommandOutputBody {status, message}. Sent
+    //once - a 401 takes a new token and calls once more, as every call; nothing else is retried
+    public Mono<IquaCommandResult> command(final String deviceId, final String function, final String action) {
+        return call(value -> webClient.put()
+                .uri(uri -> uri.path(DEVICES + deviceId + "/command").build())
+                .header(AUTHORIZATION, BEARER + value)
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_JSON)
+                .bodyValue(jsonMapper.createObjectNode().put("function", function).put("action", action)), "the command")
+            .map(root -> new IquaCommandResult(text(root.path("status")), text(root.path("message"))));
+    }
+
+    private static String text(final JsonNode node) {
+        return node.isString() ? node.asString() : null;
+    }
+
     //the first page of the alerts of a device (HAS-399) - GetDeviceAlertsOutputBody, its list "alerts" (null for none); an
     //answer that is neither a list nor null is not the model
     public Mono<List<IquaAlert>> alerts(final String deviceId, final int perPage) {

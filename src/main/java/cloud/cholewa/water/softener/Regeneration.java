@@ -10,12 +10,10 @@ import java.util.stream.Stream;
 //it would otherwise raise: the softener takes water from the mains while it regenerates, about 0.5 l/min for two hours
 //(the continuous flow of 2026-11-09 02:01 - 04:04, the regeneration 02:01:51 - 04:03:46). Without I/O - pinned by
 //RegenerationTest.
-//startedAt / endedAt - the newest regeneration seen: regen_status_enum not 0, from the time the cloud changed it (its
-//updated_at), the reading itself when it has none; endedAt null while it goes on. scheduledAt - regen_time_secs, the time of
-//day the softener regenerates at (02:00 - the clock of the softener, current_time_secs, ran 2 min behind the house on
-//2026-11-08). checkedAt - the newest reading that told the status.
-//Which value of regen_status_enum a regeneration has is not seen yet (0 after one, from its end): any other than 0 is taken
-//for a regeneration, and every change is logged with the value by SoftenerTracker
+//startedAt / endedAt - the newest regeneration seen (SoftenerTracker decides from the reading what is one), from the time
+//the cloud changed regen_status_enum (its updated_at), the reading itself when it has none; endedAt null while it goes on.
+//scheduledAt - regen_time_secs, the time of day the softener regenerates at (02:00 - the clock of the softener,
+//current_time_secs, ran 2 min behind the house on 2026-11-08). checkedAt - the newest reading that told the status
 public record Regeneration(LocalDateTime startedAt, LocalDateTime endedAt, LocalTime scheduledAt, LocalDateTime checkedAt) {
 
     public static final Regeneration NONE = new Regeneration(null, null, null, null);

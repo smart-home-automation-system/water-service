@@ -45,7 +45,17 @@ public enum WaterError implements ErrorId {
     SOFTENER_UNAVAILABLE("Water softener unavailable"),
 
     //a metric of the history of the softener that is not one of SoftenerMetric (HAS-398)
-    UNKNOWN_METRIC("Unknown metric");
+    UNKNOWN_METRIC("Unknown metric"),
+
+    //the iQua cloud refused the command of the softener or did not answer it; only its status, if it answered, goes past
+    //the first hop (HAS-400)
+    SOFTENER_COMMAND_FAILED("Softener command failed"),
+
+    //a command of the regeneration refused while the softener regenerates (HAS-400)
+    REGENERATION_IN_PROGRESS("Regeneration in progress"),
+
+    //a command of the softener within a minute of the last one - one a minute at most (HAS-400)
+    COMMAND_TOO_SOON("Command too soon");
 
     private final String description;
 }

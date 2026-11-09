@@ -3,11 +3,13 @@ package cloud.cholewa.water.api;
 import cloud.cholewa.water.config.ExceptionHandlerConfig;
 import cloud.cholewa.water.infrastructure.error.ValveException;
 import cloud.cholewa.water.model.SoftenerAlertReply;
+import cloud.cholewa.water.model.SoftenerCommandReply;
 import cloud.cholewa.water.model.SoftenerReply;
 import cloud.cholewa.water.model.SoftenerDayReply;
 import cloud.cholewa.water.model.SoftenerHistoryReply;
 import cloud.cholewa.water.model.SoftenerRegenerationReply;
 import cloud.cholewa.water.service.SoftenerAlertService;
+import cloud.cholewa.water.service.SoftenerCommandService;
 import cloud.cholewa.water.service.SoftenerHistoryService;
 import cloud.cholewa.water.service.SoftenerService;
 import org.junit.jupiter.api.Test;
@@ -45,6 +47,9 @@ class SoftenerControllerTest {
 
     @MockitoBean
     private SoftenerAlertService softenerAlertService;
+
+    @MockitoBean
+    private SoftenerCommandService softenerCommandService;
 
     //HAS-398: the history of a metric - the shape of the weather and the hot-water histories
     @Test
@@ -118,7 +123,7 @@ class SoftenerControllerTest {
             LocalDateTime.of(2026, 11, 9, 10, 0), false,
             new SoftenerReply.Water(312.4, 410.0, 1890.5, 152003.2, 0.0),
             new SoftenerReply.Salt(45.0, 38, LocalDate.of(2026, 12, 17)),
-            new SoftenerReply.Regeneration(3, LocalDate.of(2026, 11, 6), 412),
+            new SoftenerReply.Regeneration(3, LocalDate.of(2026, 11, 6), 412, "scheduled"),
             14.0, 239.7, 950, -58,
             new SoftenerReply.Alerts(false, true, false, false, false, false))));
 
@@ -135,7 +140,7 @@ class SoftenerControllerTest {
                   "water": {"usedTodayLitres": 312.4, "averageDailyLitres": 410.0, "treatedAvailableLitres": 1890.5,
                             "totalLitres": 152003.2, "flowLitresPerMinute": 0.0},
                   "salt": {"levelPercent": 45.0, "daysLeft": 38, "outOfSaltDate": "2026-12-17"},
-                  "regeneration": {"daysSinceLast": 3, "lastAt": "2026-11-06", "total": 412},
+                  "regeneration": {"daysSinceLast": 3, "lastAt": "2026-11-06", "total": 412, "status": "scheduled"},
                   "hardnessGpg": 14.0,
                   "hardnessMgCaco3": 239.7,
                   "daysInOperation": 950,
@@ -153,7 +158,7 @@ class SoftenerControllerTest {
             LocalDateTime.of(2026, 11, 9, 10, 0), true,
             new SoftenerReply.Water(null, null, null, null, null),
             new SoftenerReply.Salt(null, null, null),
-            new SoftenerReply.Regeneration(null, null, null),
+            new SoftenerReply.Regeneration(null, null, null, null),
             null, null, null, null,
             new SoftenerReply.Alerts(null, null, null, null, null, null))));
 
@@ -178,6 +183,81 @@ class SoftenerControllerTest {
             .expectBody()
             .jsonPath("$.errors[0].code").isEqualTo("SOFTENER_UNAVAILABLE")
             .jsonPath("$.errors[0].message").isEqualTo("Water softener unavailable");
+    }
+
+    //HAS-400: a command of the regeneration answers 202 with what the cloud said
+    @Test
+    void should_accept_a_regeneration_tonight() {
+        when(softenerCommandService.regenerate("tonight")).thenReturn(Mono.just(new SoftenerCommandReply(
+            "regenerate tonight", "success", "Command sent", LocalDateTime.of(2026, 11, 9, 19, 0))));
+
+        webTestClient.post()
+            .uri("/softener/regeneration?when=tonight")
+            .exchange()
+            .expectStatus().isAccepted()
+            .expectBody().json("""
+                {"command": "regenerate tonight", "status": "success", "message": "Command sent",
+                 "sentAt": "2026-11-09T19:00:00"}
+                """, JsonCompareMode.STRICT);
+    }
+
+    @Test
+    void should_accept_the_cancel_of_a_regeneration() {
+        when(softenerCommandService.cancel()).thenReturn(Mono.just(new SoftenerCommandReply(
+            "cancel the scheduled regeneration", null, null, LocalDateTime.of(2026, 11, 9, 19, 0))));
+
+        webTestClient.delete()
+            .uri("/softener/regeneration")
+            .exchange()
+            .expectStatus().isAccepted()
+            .expectBody().json("""
+                {"command": "cancel the scheduled regeneration", "sentAt": "2026-11-09T19:00:00"}
+                """, JsonCompareMode.STRICT);
+    }
+
+    @Test
+    void should_refuse_a_regeneration_while_one_goes_on() {
+        when(softenerCommandService.regenerate(null)).thenReturn(Mono.error(ValveException.regenerationInProgress()));
+
+        webTestClient.post()
+            .uri("/softener/regeneration")
+            .exchange()
+            .expectStatus().isEqualTo(409)
+            .expectBody()
+            .jsonPath("$.errors[0].code").isEqualTo("REGENERATION_IN_PROGRESS");
+    }
+
+    @Test
+    void should_refuse_a_command_too_soon() {
+        when(softenerCommandService.cancel()).thenReturn(Mono.error(ValveException.commandTooSoon(20)));
+
+        webTestClient.delete()
+            .uri("/softener/regeneration")
+            .exchange()
+            .expectStatus().isEqualTo(409)
+            .expectBody()
+            .jsonPath("$.errors[0].code").isEqualTo("COMMAND_TOO_SOON");
+    }
+
+    @Test
+    void should_answer_502_when_the_cloud_refused_the_command() {
+        when(softenerCommandService.regenerate("now")).thenReturn(Mono.error(ValveException.softenerCommandFailed(500)));
+
+        webTestClient.post()
+            .uri("/softener/regeneration?when=now")
+            .exchange()
+            .expectStatus().isEqualTo(502)
+            .expectBody()
+            .jsonPath("$.errors[0].code").isEqualTo("SOFTENER_COMMAND_FAILED")
+            .jsonPath("$.errors[0].message").isEqualTo("Softener command failed");
+    }
+
+    @Test
+    void should_never_regenerate_on_a_get() {
+        webTestClient.get()
+            .uri("/softener/regeneration")
+            .exchange()
+            .expectStatus().is4xxClientError();
     }
 
     //HAS-399: the alerts of the iQua cloud for the alerts card of the dashboard, a field it left out left out

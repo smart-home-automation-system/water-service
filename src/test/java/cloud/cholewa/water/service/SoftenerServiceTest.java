@@ -57,7 +57,7 @@ class SoftenerServiceTest {
             .assertNext(reply -> assertThat(reply).isEqualTo(new SoftenerReply(true, true, READ, false,
                 new SoftenerReply.Water(312.4, 410.0, 1890.5, 152003.2, 0.0),
                 new SoftenerReply.Salt(45.0, 38, LocalDate.of(2026, 12, 17)),
-                new SoftenerReply.Regeneration(3, LocalDate.of(2026, 11, 6), 412),
+                new SoftenerReply.Regeneration(3, LocalDate.of(2026, 11, 6), 412, null),
                 14.0, 239.7, 950, -58,
                 new SoftenerReply.Alerts(false, false, false, false, false, false))))
             .verifyComplete();
@@ -92,7 +92,7 @@ class SoftenerServiceTest {
             .assertNext(reply -> {
                 assertThat(reply.reachable()).isFalse();
                 assertThat(reply.salt()).isEqualTo(new SoftenerReply.Salt(null, null, null));
-                assertThat(reply.regeneration()).isEqualTo(new SoftenerReply.Regeneration(null, null, null));
+                assertThat(reply.regeneration()).isEqualTo(new SoftenerReply.Regeneration(null, null, null, null));
                 assertThat(reply.hardnessMgCaco3()).isNull();
             })
             .verifyComplete();

@@ -148,8 +148,8 @@ public class SoftenerReader {
     private record Read(SoftenerReading reading, LocalDateTime at) {
     }
 
-    //the regeneration (HAS-399): regen_status_enum - 0 while the softener does not regenerate - with its updated_at, the
-    //time the cloud changed it; regen_time_secs - the time of day of the regeneration in seconds. A property left out or
+    //the regeneration (HAS-399, HAS-400): enriched_data.water_treatment.regeneration_status - the words of the cloud (none,
+    //scheduled, ...); regen_status_enum - 0 none, 1 scheduled - with its updated_at, the time the cloud changed it; regen_time_secs - the time of day of the regeneration in seconds. A property left out or
     //not a number tells nothing
     private void regeneration(final IquaDevice device, final Integer daysSince, final LocalDateTime at) {
         final Map<String, IquaProperty> reported = device.properties();
@@ -162,8 +162,14 @@ public class SoftenerReader {
             .filter(seconds -> seconds >= 0)
             .map(seconds -> LocalTime.ofSecondOfDay(seconds % SECONDS_A_DAY))
             .orElse(null);
-        softenerTracker.regeneration(status.flatMap(SoftenerReader::whole).map(Long::intValue).orElse(null), daysSince,
-            changedAt, scheduledAt, at);
+        final String words = Optional.ofNullable(device.enrichedData())
+            .map(enriched -> enriched.path("water_treatment").path("regeneration_status"))
+            .filter(JsonNode::isString)
+            .map(JsonNode::asString)
+            .filter(phase -> !phase.isBlank())
+            .orElse(null);
+        softenerTracker.regeneration(words, status.flatMap(SoftenerReader::whole).map(Long::intValue).orElse(null),
+            daysSince, changedAt, scheduledAt, at);
     }
 
     private static Optional<Long> whole(final IquaProperty property) {

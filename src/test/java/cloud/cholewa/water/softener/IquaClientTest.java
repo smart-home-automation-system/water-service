@@ -372,6 +372,37 @@ class IquaClientTest {
             .verify();
     }
 
+    //HAS-400: a command - PUT with the function and the action of the device, the answer of the cloud as it words it
+    @Test
+    void should_send_a_command_of_the_device() throws InterruptedException {
+        server.enqueue(token(first(), "refresh-1"));
+        server.enqueue(json("{\"status\":\"success\",\"message\":\"Command sent\"}"));
+
+        client.command("dev-1", "regenerate", "schedule").as(StepVerifier::create)
+            .expectNext(new IquaCommandResult("success", "Command sent"))
+            .verifyComplete();
+
+        server.takeRequest();
+        final RecordedRequest command = server.takeRequest();
+        assertThat(command.getMethod()).isEqualTo("PUT");
+        assertThat(command.getUrl().encodedPath()).isEqualTo("/v1/devices/dev-1/command");
+        assertThat(command.getBody().utf8()).isEqualTo("{\"function\":\"regenerate\",\"action\":\"schedule\"}");
+    }
+
+    @Test
+    void should_fail_a_command_the_cloud_refused_with_its_status() {
+        server.enqueue(token(first(), "refresh-1"));
+        server.enqueue(status(422));
+
+        client.command("dev-1", "regenerate", "cancel").as(StepVerifier::create)
+            .expectErrorSatisfies(failure -> {
+                assertThat(failure).isInstanceOf(IquaException.class)
+                    .hasMessage("The iQua cloud answered HTTP 422 for the command");
+                assertThat(((IquaException) failure).getStatus()).isEqualTo(422);
+            })
+            .verify();
+    }
+
     //HAS-399: the first page of the alerts, the shape of GetDeviceAlertsOutputBody of the OpenAPI of the cloud
     @Test
     void should_read_the_alerts_of_the_softener() throws InterruptedException {

@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import reactor.test.publisher.PublisherProbe;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.net.URI;
 import java.time.Duration;
@@ -313,12 +314,12 @@ class SoftenerReaderTest {
         assertThat(tracker.regeneration().startedAt()).isEqualTo(LocalDateTime.of(2026, 11, 9, 9, 55, 10));
     }
 
-    //a status not 0 on a day without a regeneration (days_since_last_regen 3) is something else - queued for the night, say
+    //a status above 1 on a day without a regeneration (days_since_last_regen 3) is something else
     @Test
     void should_not_take_a_status_for_a_regeneration_on_a_day_without_one() {
         final IquaDevice queued = new IquaDevice("dev-1", "SN1", "Softener", "demand_softener", "thing-1", true,
             Map.of("regen_status_enum", new IquaProperty("regen_status_enum", SoftenerSamples.JSON.getNodeFactory()
-                    .numberNode(1), null, null, "2026-11-09T08:55:10Z"),
+                    .numberNode(2), null, null, "2026-11-09T08:55:10Z"),
                 "days_since_last_regen", new IquaProperty("days_since_last_regen", SoftenerSamples.JSON.getNodeFactory()
                     .numberNode(3), null, null, "2026-11-09T00:00:00Z")), null);
         when(client.devices()).thenReturn(Mono.just(List.of(LISTED)));
@@ -328,6 +329,40 @@ class SoftenerReaderTest {
 
         assertThat(tracker.regeneration().regenerating()).isFalse();
         assertThat(tracker.regeneration().checkedAt()).isEqualTo(LocalDateTime.of(2026, 11, 9, 10, 0));
+    }
+
+    //HAS-400: the answer of the real softener with a regeneration scheduled for the night - regen_status_enum 1 and
+    //days_since_last_regen 0 the evening after a regeneration (2026-11-09 18:31), regeneration_status scheduled: no
+    //regeneration (0.17.0 took it for one and held the flow alarms of the evening)
+    @Test
+    void should_not_take_a_scheduled_regeneration_for_one() {
+        final IquaDevice scheduled = SoftenerSamples.JSON.convertValue(
+            SoftenerSamples.JSON.readTree(SoftenerSamples.resource("/iqua/detail-scheduled.json")).path("device"),
+            IquaDevice.class);
+        when(client.devices()).thenReturn(Mono.just(List.of(LISTED)));
+        when(client.detail("dev-1")).thenReturn(Mono.just(scheduled));
+
+        reader.read().as(StepVerifier::create).verifyComplete();
+
+        assertThat(tracker.regeneration().regenerating()).isFalse();
+        assertThat(tracker.regenerationStatus()).isEqualTo("scheduled");
+    }
+
+    //the words of the cloud win over the enum: anything but none and scheduled is a regeneration
+    @Test
+    void should_take_the_words_of_the_cloud_over_the_enum() {
+        final ObjectNode enriched = SoftenerSamples.JSON.createObjectNode();
+        enriched.putObject("water_treatment").put("regeneration_status", "regenerating");
+        final IquaDevice regenerating = new IquaDevice("dev-1", "SN1", "Softener", "demand_softener", "thing-1", true,
+            Map.of("regen_status_enum", new IquaProperty("regen_status_enum", SoftenerSamples.JSON.getNodeFactory()
+                .numberNode(1), null, null, "2026-11-09T08:55:10Z")), enriched);
+        when(client.devices()).thenReturn(Mono.just(List.of(LISTED)));
+        when(client.detail("dev-1")).thenReturn(Mono.just(regenerating));
+
+        reader.read().as(StepVerifier::create).verifyComplete();
+
+        assertThat(tracker.regeneration().regenerating()).isTrue();
+        assertThat(tracker.regenerationStatus()).isEqualTo("regenerating");
     }
 
     //a reading without the status tells nothing of the regeneration
