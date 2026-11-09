@@ -9,7 +9,7 @@ the consumption by day, week, month and year on `GET /home/water/consumption`; s
 the waterworks compared with what the house measured, and the daily history imported from the Shelly cloud; since HAS-319
 the alarms of the mains, the valve and frost, and since HAS-320 those of the flow - high, continuous, in an empty house; since
 HAS-404 the circulation pump of the hot water (relay 1 of the Shelly Uni): its state and a manual start, and since HAS-405 its
-automation (the motion and the lights of the bathrooms, comfort windows); since HAS-397 the water softener, read from the iQua cloud, and since HAS-398 its history, days and regenerations, since HAS-399 its alerts - and its regeneration no longer raises the flow alarms.
+automation (the motion and the lights of the bathrooms, comfort windows); since HAS-397 the water softener, read from the iQua cloud, and since HAS-398 its history, days and regenerations, since HAS-399 its alerts - and its regeneration no longer raises the flow alarms, since HAS-400 a regeneration on demand.
 
 Part of the smart-home-automation-system organization — org-wide conventions, the
 repository map and working rules come from the workspace-level context
@@ -17,7 +17,7 @@ repository map and working rules come from the workspace-level context
 repository themselves; Claude's default role here is analysis, code review and security
 review - the owner had Claude implement the readings of the water valve (HAS-316), the consumption
 (HAS-317), the bills (HAS-318), the alarms (HAS-319, HAS-320), the command of the valve (HAS-321) and the circulation pump
-(HAS-404, HAS-405) and the water softener (HAS-397, HAS-398, HAS-399) and reviews them
+(HAS-404, HAS-405) and the water softener (HAS-397 - HAS-400) and reviews them
 in IntelliJ.
 
 ## Role in the system
@@ -410,7 +410,11 @@ in IntelliJ.
   - **The regeneration and the flow alarms** (HAS-399, `Regeneration`, `SoftenerTracker.regeneration`, `FlowRules`) - the
     softener takes about 0.5 l/min from the mains for two hours (2026-11-09 02:01 - 04:04, the regeneration 02:01:51 - 04:03:46),
     which raised the continuous flow:
-    - **Seen from `regen_status_enum`** (not 0 - regenerating) dated by its `updated_at` (the time the cloud changed it, house time);
+    - **Seen from the words of the cloud** (`enriched_data.water_treatment.regeneration_status`: `none`, `scheduled` - no
+      regeneration, anything else one; HAS-400) and without them from `regen_status_enum` (0 none, **1 scheduled** - seen on
+      2026-11-09 at 18:31 the evening after a regeneration, `days_since_last_regen` 0: 0.17.0 took it for a regeneration and
+      would have held the flow alarms of the evening for 3 h; above 1 a regeneration, only on its day), dated by the
+      `updated_at` of the enum (the time the cloud changed it, house time);
       `regen_time_secs` is the time of day of the regeneration (7200 = 02:00 - `current_time_secs` 7340 was written at 02:04 of
       the house, so these are seconds of the day of the clock of the softener, not a length). **Which value a regeneration has is
       not seen** (0 since its end): any other is taken for one **only on the day of a regeneration** (`days_since_last_regen`
@@ -424,6 +428,18 @@ in IntelliJ.
     - **`FlowRules`**: the continuous flow and the empty house only; an excused run opens only when the water runs on after the
       regeneration - above for `continuous-after` since its end, or for longer than `continuous-pause` in the empty house - and the
       episode opens at the end. The high flow is never excused. `AlarmMonitor` hands `SoftenerTracker.regeneration()` in.
+  - **The regeneration on demand** (HAS-400, `SoftenerCommandService`, `IquaClient.command`) - the one write on the softener:
+    - `POST /softener/regeneration?when=now|tonight` and `DELETE /softener/regeneration` send `PUT /devices/{id}/command`
+      `{function: regenerate, action: regenerate | schedule | cancel}` - **the pairs the device offers in the actions of its
+      detail**, `recharge.ui.actions` of `enriched_data.water_treatment`: idle - Recharge Now and Schedule
+      (`iqua/detail-or-summary.json`), scheduled - Recharge Now and Cancel Scheduled Recharge (`iqua/detail-scheduled.json`,
+      the owner scheduled one in the web app on 2026-11-09 and cancelled it); `SoftenerCommandServiceTest` pins the mapping on both.
+    - Sent once; refused before sending: no reading (503), regenerating (409 `REGENERATION_IN_PROGRESS`), within `MIN_GAP` (1 min) of
+      the last command (409 `COMMAND_TOO_SOON`, a failed one counts - it may have been carried out). The failure of the cloud is 502
+      `SOFTENER_COMMAND_FAILED` with its status alone, what it said to the log. **No real command was sent through the service yet** -
+      the first one on an evening agreed with the owner (DoD of HAS-400).
+    - `GET /softener` carries `regeneration.status` (the words of the cloud, `SoftenerTracker.regenerationStatus`) for the cancel
+      button of the dashboard.
   - **Rehearsed** (2026-11-04): the released 0.6.1 image applied V1-V2 on a throwaway PostgreSQL with SSL (a user
     with `USAGE, CREATE` on `public` only), the new jar V3 with the real valve and the registry through a
     port-forward, no broker: `/valve` answered the valve within 10 s, a row of the counter a change, the same

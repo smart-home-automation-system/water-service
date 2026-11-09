@@ -74,6 +74,28 @@ public class ValveException extends RuntimeException {
             "The water softener has not been read from the iQua cloud yet");
     }
 
+    //the iQua cloud refused the command of the softener (status) or did not answer it (null) - HAS-400
+    public static ValveException softenerCommandFailed(final Integer status) {
+        return new ValveException(HttpStatus.BAD_GATEWAY, WaterError.SOFTENER_COMMAND_FAILED, status == null
+            ? "The iQua cloud did not answer the command of the softener"
+            : "The iQua cloud refused the command of the softener with " + status);
+    }
+
+    public static ValveException regenerationInProgress() {
+        return new ValveException(HttpStatus.CONFLICT, WaterError.REGENERATION_IN_PROGRESS,
+            "The softener regenerates now");
+    }
+
+    public static ValveException commandTooSoon(final long seconds) {
+        return new ValveException(HttpStatus.CONFLICT, WaterError.COMMAND_TOO_SOON,
+            "The last command of the softener was sent " + seconds + " s ago - one a minute at most");
+    }
+
+    public static ValveException invalidSoftenerCommand(final String when) {
+        return new ValveException(HttpStatus.BAD_REQUEST, WaterError.INVALID_COMMAND,
+            "when must be now or tonight, not '" + when + "'");
+    }
+
     //the alerts of the softener not read from the iQua cloud (HAS-399) - what it answered goes to the log only
     public static ValveException softenerCloudFailed() {
         return new ValveException(HttpStatus.BAD_GATEWAY, WaterError.DEVICE_FAILED,

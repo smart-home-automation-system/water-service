@@ -17,7 +17,8 @@ import java.time.LocalDateTime;
  * keeps a live session - HAS-401).<br>
  * {@code salt} - the level in per cent as the softener counts it down from what was entered on its panel (it is not
  * measured), the days it estimates are left and the day that falls on.<br>
- * {@code regeneration} - days since the last one, its day, and the regenerations since the softener was installed.<br>
+ * {@code regeneration} - days since the last one, its day, the regenerations since the softener was installed, and
+ * {@code status} - the words of the cloud for it now ({@code none}, {@code scheduled}, ...; HAS-400).<br>
  * {@code hardnessGpg} - the hardness set on the softener in grains per gallon; {@code hardnessMgCaco3} the same in mg/l
  * of CaCO3.<br>
  * {@code alerts} - the flags of the softener; {@code leak} is its own watch of a continuous flow.
@@ -53,7 +54,7 @@ public record SoftenerReply(
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    public record Regeneration(Integer daysSinceLast, LocalDate lastAt, Integer total) {
+    public record Regeneration(Integer daysSinceLast, LocalDate lastAt, Integer total, String status) {
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)

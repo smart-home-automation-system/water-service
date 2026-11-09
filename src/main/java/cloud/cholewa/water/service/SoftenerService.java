@@ -52,7 +52,7 @@ public class SoftenerService {
                 Optional.ofNullable(reading.saltDaysLeft()).map(day::plusDays).orElse(null)),
             new SoftenerReply.Regeneration(reading.daysSinceRegeneration(),
                 Optional.ofNullable(reading.daysSinceRegeneration()).map(day::minusDays).orElse(null),
-                reading.totalRegenerations()),
+                reading.totalRegenerations(), softenerTracker.regenerationStatus()),
             reading.hardnessGpg(),
             Optional.ofNullable(reading.hardnessGpg())
                 .map(gpg -> BigDecimal.valueOf(gpg).multiply(MG_CACO3_PER_GPG).setScale(1, RoundingMode.HALF_UP)

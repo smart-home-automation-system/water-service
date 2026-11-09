@@ -1,0 +1,216 @@
+{
+  "device": {
+    "id": "dev-1",
+    "is_online": true,
+    "system_type": "demand softener",
+    "properties": {
+      "regen_status_enum": {
+        "name": "regen_status_enum",
+        "value": 1,
+        "created_at": "2025-08-11T02:02:02Z",
+        "updated_at": "2026-11-09T17:31:49Z"
+      },
+      "regen_time_rem_secs": {
+        "name": "regen_time_rem_secs",
+        "value": 0,
+        "created_at": "2025-10-15T22:59:49Z",
+        "updated_at": "2026-11-05T09:07:16Z"
+      },
+      "regen_time_secs": {
+        "name": "regen_time_secs",
+        "value": 7200,
+        "created_at": "2025-09-25T04:49:59Z",
+        "updated_at": "2026-10-28T07:59:21Z"
+      },
+      "days_since_last_regen": {
+        "name": "days_since_last_regen",
+        "value": 0,
+        "created_at": "2025-08-12T00:00:08Z",
+        "updated_at": "2026-11-09T01:01:52Z"
+      },
+      "total_regens": {
+        "name": "total_regens",
+        "value": 156,
+        "created_at": "2025-08-17T00:00:07Z",
+        "updated_at": "2026-11-09T01:01:52Z"
+      },
+      "_internal_is_online": {
+        "name": "_internal_is_online",
+        "value": true,
+        "created_at": "2025-08-31T22:38:05Z",
+        "updated_at": "2026-10-10T18:08:25Z"
+      }
+    },
+    "enriched_data": {
+      "water_treatment": {
+        "regeneration_status": "scheduled",
+        "regeneration": {
+          "regeneration_status": "scheduled",
+          "can_schedule": false,
+          "can_recharge": true
+        },
+        "recharge": {
+          "state": "scheduled",
+          "ui": {
+            "status": {
+              "title": {
+                "key": "SoftenerRecharge",
+                "value": "Recharge"
+              },
+              "value": {
+                "key": "Scheduled",
+                "value": "Scheduled"
+              }
+            },
+            "manage_label": {
+              "key": "ManageRecharge",
+              "value": "Manage Recharge"
+            },
+            "dialog": {
+              "title": {
+                "key": "ManageRecharge",
+                "value": "Manage Recharge"
+              },
+              "message": {
+                "key": "RechargeIsCurrentlyScheduled",
+                "value": "Recharge is currently scheduled. You may cancel it, or start an immediate recharge"
+              },
+              "cancel_label": {
+                "key": "Ok",
+                "value": "Ok"
+              }
+            },
+            "actions": [
+              {
+                "id": "recharge_now",
+                "label": {
+                  "key": "RechargeNow",
+                  "value": "Recharge Now"
+                },
+                "command": {
+                  "function": "regenerate",
+                  "action": "regenerate"
+                },
+                "confirmation": {
+                  "title": {
+                    "key": "RechargeNowTitle",
+                    "value": "Recharge Now"
+                  },
+                  "message": {
+                    "key": "RechargeNowMessage",
+                    "value": "This will trigger an immediate recharge."
+                  },
+                  "confirm_label": {
+                    "key": "RechargeNow",
+                    "value": "Recharge Now"
+                  },
+                  "cancel_label": {
+                    "key": "Cancel",
+                    "value": "Cancel"
+                  }
+                }
+              },
+              {
+                "id": "cancel_scheduled_recharge",
+                "label": {
+                  "key": "CancelScheduledRecharge",
+                  "value": "Cancel Scheduled Recharge"
+                },
+                "command": {
+                  "function": "regenerate",
+                  "action": "cancel"
+                }
+              }
+            ]
+          },
+          "time_remaining": {
+            "seconds": 0,
+            "display": "00:00:00"
+          },
+          "time_remaining_seconds": 0,
+          "current_valve_state": "Service",
+          "can_recharge": true,
+          "can_schedule": false,
+          "timing": {
+            "status": "unavailable",
+            "server_time": "2026-11-09T17:33:26.2609906Z"
+          },
+          "presentation": {
+            "status": {
+              "state": "scheduled",
+              "title": {
+                "key": "RechargeScheduledTitle",
+                "value": "Recharge Scheduled"
+              },
+              "description": {
+                "key": "RechargeScheduledMessage",
+                "value": "A recharge is scheduled for 02:00."
+              },
+              "is_regenerating": false,
+              "can_perform_actions": true
+            },
+            "actions": [
+              {
+                "id": "recharge_now",
+                "label": {
+                  "key": "RechargeNow",
+                  "value": "Recharge Now"
+                },
+                "description": {
+                  "key": "RechargeNowMessage",
+                  "value": "This will trigger an immediate recharge."
+                },
+                "command": {
+                  "function": "regenerate",
+                  "action": "regenerate"
+                },
+                "confirmation": {
+                  "title": {
+                    "key": "RechargeNowTitle",
+                    "value": "Recharge Now"
+                  },
+                  "message": {
+                    "key": "RechargeNowMessage",
+                    "value": "This will trigger an immediate recharge."
+                  },
+                  "confirm_label": {
+                    "key": "RechargeNow",
+                    "value": "Recharge Now"
+                  },
+                  "cancel_label": {
+                    "key": "Cancel",
+                    "value": "Cancel"
+                  }
+                }
+              },
+              {
+                "id": "cancel_scheduled_recharge",
+                "label": {
+                  "key": "CancelScheduledRecharge",
+                  "value": "Cancel Scheduled Recharge"
+                },
+                "description": {
+                  "key": "RechargeCancelScheduleMessage",
+                  "value": "This will cancel the scheduled recharge."
+                },
+                "command": {
+                  "function": "regenerate",
+                  "action": "cancel"
+                }
+              }
+            ],
+            "schedule": {
+              "is_scheduled": true,
+              "scheduled_at": "2026-11-10T01:00:00Z",
+              "recharge_time": "02:00",
+              "message": {
+                "key": "RechargeScheduledMessage",
+                "value": "A recharge is scheduled for 02:00."
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -80,13 +80,14 @@ those of the alarms above (`water_alert`, kinds added by `V6`).
 **The regeneration of the softener is no leak** (HAS-399): it takes water from the mains, about
 0.5 l/min for two hours at 02:00 every few days, which had raised the continuous flow on the night of
 2026-11-09. A continuous flow or one of the empty house that started with a regeneration (seen from
-`regen_status_enum` of the iQua cloud, not 0 while it regenerates, from the time the cloud changed it)
+`regeneration_status` of the iQua cloud - `none` and `scheduled` are none, from the time the cloud changed
+`regen_status_enum`; without the words `regen_status_enum` above 1 on the day of a regeneration - 1 is scheduled)
 is judged from where the regeneration ended - raised only when the water runs on after it, the
 continuous flow for `continuous-after` from the end, the empty house for longer than the pause; a
 flow that starts near the time of the regeneration (`regen_time_secs`, 5 min before to 20 min after)
 waits up to 20 min for a reading of the cloud to say whether the softener regenerates. A high flow is
-never excused. Which value of the status a regeneration has is not seen yet - every start and end is
-logged with it.
+never excused. The words of a regeneration going on are not seen yet - every start and end is logged
+with them.
 
 It also closes and opens the valve (HAS-321, `POST /home/water/valve`) - the one command that cuts
 the water of the whole house. **Closing on a leak is the owner's choice and off by default**
@@ -186,6 +187,8 @@ the gateway, the writes are not authenticated - access is LAN / VPN only.
 | `GET` | `/home/water/softener/days?from=&to=` | The litres through the softener per day — see below. |
 | `GET` | `/home/water/softener/regenerations?from=&to=` | The regenerations of the softener — see below. |
 | `GET` | `/home/water/softener/alerts` | The alerts the iQua cloud keeps of the softener — see below. |
+| `POST` | `/home/water/softener/regeneration?when=now|tonight` | Start a regeneration now (default) or tonight at 02:00 — see below. |
+| `DELETE` | `/home/water/softener/regeneration` | Cancel the regeneration scheduled for tonight — see below. |
 
 ## The water valve
 
@@ -519,6 +522,22 @@ above about 1000 calls a day). `503 SOFTENER_UNAVAILABLE` before the softener wa
 | Property | Default | Meaning |
 |---|---|---|
 | `water.softener.offline-after` | `PT30M` | no reading of the softener online for this long is the alarm (5 min - 24 h, a bare number is minutes) |
+
+### The regeneration on demand
+
+The only write of the house on the softener (HAS-400) - before guests, after a refill:
+
+- `POST /home/water/softener/regeneration?when=now` (the default) - a regeneration now; `when=tonight` - at the time of the
+  softener, 02:00. `DELETE /home/water/softener/regeneration` - cancel the one scheduled for tonight.
+- Sent once to the iQua cloud (`PUT /devices/{id}/command`) as the pairs the device offers in the actions of its detail:
+  `regenerate` / `regenerate`, `schedule`, `cancel` (read from the real device in both states, pinned by a test).
+- `202` - `{"command", "status", "message", "sentAt"}`, the status and message as the cloud words them. Refused before
+  anything is sent: `503 SOFTENER_UNAVAILABLE` without a reading, `409 REGENERATION_IN_PROGRESS` while it regenerates (the
+  application offers no cancel of a running one), `409 COMMAND_TOO_SOON` within a minute of the last command;
+  `400 INVALID_COMMAND` for another `when`. A command the cloud refused or did not answer is `502 SOFTENER_COMMAND_FAILED`
+  with its status alone - it counts for the minute, it may have been carried out.
+- No row of its own: the regeneration it starts is seen in `GET /softener/regenerations`, a scheduled one as
+  `regeneration.status: "scheduled"` of `GET /softener` after the next read (5 min).
 
 ## Temperature history
 
