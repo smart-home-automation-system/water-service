@@ -81,6 +81,18 @@ public class ValveException extends RuntimeException {
             : "The iQua cloud refused the command of the softener with " + status);
     }
 
+    public static ValveException liveThrottled() {
+        return new ValveException(HttpStatus.TOO_MANY_REQUESTS, WaterError.LIVE_THROTTLED,
+            "The iQua cloud throttles the live stream of the softener - try again later");
+    }
+
+    //the live stream not opened: the cloud refused it (status) or the socket did not open (null) - HAS-401
+    public static ValveException liveFailed(final Integer status) {
+        return new ValveException(HttpStatus.BAD_GATEWAY, WaterError.DEVICE_FAILED, status == null
+            ? "The live stream of the softener did not open"
+            : "The iQua cloud refused the live stream of the softener with " + status);
+    }
+
     public static ValveException regenerationInProgress() {
         return new ValveException(HttpStatus.CONFLICT, WaterError.REGENERATION_IN_PROGRESS,
             "The softener regenerates now");

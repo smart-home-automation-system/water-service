@@ -2,6 +2,7 @@ package cloud.cholewa.water.service;
 
 import cloud.cholewa.water.infrastructure.error.ValveException;
 import cloud.cholewa.water.model.SoftenerReply;
+import cloud.cholewa.water.softener.SoftenerLive;
 import cloud.cholewa.water.softener.SoftenerProperties;
 import cloud.cholewa.water.softener.SoftenerReading;
 import cloud.cholewa.water.softener.SoftenerTracker;
@@ -14,6 +15,8 @@ import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 
 //The softener now, from memory (HAS-397): 503 SOFTENER_UNAVAILABLE until the first reading, then the last reading with how
@@ -28,6 +31,7 @@ public class SoftenerService {
 
     private final SoftenerTracker softenerTracker;
     private final SoftenerProperties softenerProperties;
+    private final SoftenerLive softenerLive;
     private final Clock clock;
 
     public Mono<SoftenerReply> current() {
@@ -41,6 +45,7 @@ public class SoftenerService {
         final SoftenerReading reading = state.reading();
         final LocalDate day = state.measuredAt().toLocalDate();
         final SoftenerReading.Alerts alerts = reading.alerts();
+        final Optional<Instant> liveUntil = softenerLive.until();
         return new SoftenerReply(
             state.reachable(),
             reading.online(),
@@ -61,6 +66,9 @@ public class SoftenerService {
             reading.daysInOperation(),
             reading.signalDbm(),
             new SoftenerReply.Alerts(alerts.lowSalt(), alerts.leak(), alerts.excessiveWaterUse(), alerts.shutoffValve(),
-                alerts.resin(), alerts.error()));
+                alerts.resin(), alerts.error()),
+            liveUntil.isPresent(),
+            liveUntil.map(until -> LocalDateTime.ofInstant(until, clock.getZone()).truncatedTo(ChronoUnit.SECONDS))
+                .orElse(null));
     }
 }

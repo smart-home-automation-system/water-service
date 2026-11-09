@@ -79,6 +79,14 @@ public class SoftenerTracker {
         }
     }
 
+    //a frame of the live stream (HAS-401): the flow of the reading and its time - nothing before the first reading, and a
+    //frame older than the reading held is no news
+    void live(final double litresPerMinute, final LocalDateTime at) {
+        state.updateAndGet(held -> held.reading() == null || held.measuredAt() != null && at.isBefore(held.measuredAt())
+            ? held
+            : new State(held.reading().withFlow(litresPerMinute), at, held.readAt(), held.passed(), held.missed()));
+    }
+
     void read(final SoftenerReading reading, final LocalDateTime at, final Instant instant) {
         state.set(new State(reading, at, instant, true, 0));
     }

@@ -38,6 +38,7 @@ class SoftenerPropertiesTest {
             assertThat(properties.cloud().email()).isEqualTo("owner@example.com");
             assertThat(properties.cloud().interval()).isEqualTo(Duration.ofMinutes(5));
             assertThat(properties.offlineAfter()).isEqualTo(Duration.ofMinutes(30));
+            assertThat(properties.liveFor()).isEqualTo(Duration.ofMinutes(5));
         });
     }
 
@@ -62,7 +63,7 @@ class SoftenerPropertiesTest {
     @ParameterizedTest
     @ValueSource(strings = {"water.softener.cloud.interval=PT30S", "water.softener.cloud.interval=PT61M",
         "water.softener.cloud.email=", "water.softener.cloud.password=", "water.softener.offline-after=PT4M",
-        "water.softener.offline-after=PT25H"})
+        "water.softener.offline-after=PT25H", "water.softener.live-for=PT30S", "water.softener.live-for=PT11M"})
     void should_not_start_with_a_value_out_of_bounds(final String value) {
         contextRunner
             .withPropertyValues(value)
