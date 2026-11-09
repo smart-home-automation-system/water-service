@@ -1,7 +1,9 @@
 package cloud.cholewa.water.alarm;
 
 import cloud.cholewa.water.database.model.WaterAlertEntity;
+import cloud.cholewa.water.softener.Regeneration;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -18,7 +20,12 @@ import java.util.Optional;
 //for longer than the pause, or a new run after such a fall, closed where it fell. While the flow is not known (neither
 //the rate nor the counter fresh) nothing opens or closes - the offline alarm speaks for a valve that left; reminders go
 //on. An episode read after a restart goes on with the first run the track sees. As in AlarmRules, what a notice changes
-//is held only once it was published
+//is held only once it was published.
+//The regeneration of the softener (HAS-399) takes water from the mains, about 0.5 l/min for two hours: a continuous flow or
+//one of the empty house that started with a regeneration is judged from where it ended - raised only when the water runs
+//on after it (the continuous flow for continuous-after from the end, the empty house for longer than the pause); a flow
+//that starts near the time of the regeneration waits for the cloud to say whether the softener regenerates
+//(Regeneration.flowStart). The high flow is never excused
 final class FlowRules {
 
     private static final List<Alarm> FLOW = List.of(Alarm.HIGH_FLOW, Alarm.CONTINUOUS_FLOW, Alarm.EMPTY_HOUSE_FLOW);
@@ -26,8 +33,9 @@ final class FlowRules {
     private FlowRules() {
     }
 
-    //known - the flow is known now (the rate or the counter fresh); litres - the flow now, l/min, null when not known
-    record Readings(FlowTrack.Flows flows, boolean known, Double litres, House house) {
+    //known - the flow is known now (the rate or the counter fresh); litres - the flow now, l/min, null when not known;
+    //regeneration - of the softener, Regeneration.NONE when nothing is known of it
+    record Readings(FlowTrack.Flows flows, boolean known, Double litres, House house, Regeneration regeneration) {
     }
 
     static AlarmRules.Decision decide(final AlarmWatch held, final Readings readings, final LocalDateTime now,
@@ -61,7 +69,13 @@ final class FlowRules {
             readings.house(), now, flow)) {
             return held;
         }
-        final WaterAlertEntity opened = new WaterAlertEntity(null, alarm.wireName(), run.start(), null, null);
+        final Regeneration.FlowStart start = alarm == Alarm.HIGH_FLOW
+            ? new Regeneration.FlowStart(false, run.start())
+            : readings.regeneration().flowStart(run.start(), now);
+        if (start.held() || start.excused(run.start()) && !runsOn(alarm, run, start.start(), now, flow)) {
+            return held;
+        }
+        final WaterAlertEntity opened = new WaterAlertEntity(null, alarm.wireName(), start.start(), null, null);
         notices.add(alert(alarm, opened, readings, now, flow));
         return held.with(alarm, opened);
     }
@@ -76,6 +90,14 @@ final class FlowRules {
             case EMPTY_HOUSE_FLOW -> house.emptyFor(flow.emptyHouseAfter(), now);
             default -> throw new IllegalArgumentException("Not a flow alarm: " + alarm.wireName());
         };
+    }
+
+    //a flow the regeneration excused until from: the water ran on after it - above for continuous-after since then, or
+    //for longer than the pause of the flow alarms in the empty house
+    private static boolean runsOn(final Alarm alarm, final FlowRun run, final LocalDateTime from, final LocalDateTime now,
+                                  final FlowProperties flow) {
+        final Duration after = alarm == Alarm.CONTINUOUS_FLOW ? flow.continuousAfter() : flow.continuousPause();
+        return run.above() && from.plus(after).isBefore(run.endAt(now));
     }
 
     //where the flow of an open episode stopped, or nothing while it goes on or is not known

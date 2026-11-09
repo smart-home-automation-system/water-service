@@ -134,6 +134,31 @@ public class IquaClient {
                     .toList(), root.path("total").asLong(0))));
     }
 
+    //the first page of the alerts of a device (HAS-399) - GetDeviceAlertsOutputBody, its list "alerts" (null for none); an
+    //answer that is neither a list nor null is not the model
+    public Mono<List<IquaAlert>> alerts(final String deviceId, final int perPage) {
+        return call(value -> webClient.get()
+                .uri(uri -> uri.path("/devices/" + deviceId + "/alerts")
+                    .queryParam("page", 1)
+                    .queryParam("per_page", perPage)
+                    .build())
+                .header("Authorization", "Bearer " + value)
+                .accept(MediaType.APPLICATION_JSON), "the alerts")
+            .flatMap(root -> Mono.justOrEmpty(Optional.of(root.path("alerts")).filter(node -> node.isArray() || node.isNull()))
+                .switchIfEmpty(Mono.error(() -> new IquaException("The iQua cloud answered no list of the alerts")))
+                .map(alerts -> StreamSupport.stream(alerts.spliterator(), false)
+                    .map(this::alert)
+                    .toList()));
+    }
+
+    private IquaAlert alert(final JsonNode alert) {
+        try {
+            return jsonMapper.convertValue(alert, IquaAlert.class);
+        } catch (final RuntimeException notTheModel) {
+            throw new IquaException("The iQua cloud answered the alerts not as their model");
+        }
+    }
+
     private IquaRegeneration regeneration(final JsonNode event) {
         try {
             return jsonMapper.convertValue(event, IquaRegeneration.class);

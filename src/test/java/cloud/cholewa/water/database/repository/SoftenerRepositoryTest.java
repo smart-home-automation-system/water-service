@@ -1,5 +1,6 @@
 package cloud.cholewa.water.database.repository;
 
+import cloud.cholewa.water.alarm.SoftenerAlarm;
 import cloud.cholewa.water.model.SoftenerHistoryReply;
 import cloud.cholewa.water.softener.SoftenerMetric;
 import cloud.cholewa.water.softener.SoftenerReading;
@@ -206,5 +207,35 @@ class SoftenerRepositoryTest {
             .expectNext(List.of(start, start.minusDays(3)))
             .verifyComplete();
         sut.deleteRegenerationsBefore(start.minusDays(730)).as(StepVerifier::create).expectNext(1L).verifyComplete();
+    }
+
+    //HAS-399, V10: every alarm of the softener is a kind water_alert takes - the CHECK and the 20 characters of the column
+    @Test
+    void should_store_an_episode_of_every_alarm_of_the_softener() {
+        for (final SoftenerAlarm alarm : SoftenerAlarm.values()) {
+            databaseClient.sql("INSERT INTO water_alert (kind, opened_at) VALUES (:kind, :at)")
+                .bind("kind", alarm.wireName())
+                .bind("at", AT)
+                .then()
+                .as(StepVerifier::create)
+                .verifyComplete();
+        }
+        databaseClient.sql("SELECT count(*) AS stored FROM water_alert WHERE kind LIKE '%salt' OR kind LIKE 'softener%'"
+                + " OR kind = 'excessive use'")
+            .map(row -> row.get("stored", Long.class))
+            .one()
+            .as(StepVerifier::create)
+            .expectNext((long) SoftenerAlarm.values().length)
+            .verifyComplete();
+        databaseClient.sql("DELETE FROM water_alert").then().as(StepVerifier::create).verifyComplete();
+    }
+
+    @Test
+    void should_refuse_a_kind_water_alert_does_not_know() {
+        databaseClient.sql("INSERT INTO water_alert (kind, opened_at) VALUES ('softener party', :at)")
+            .bind("at", AT)
+            .then()
+            .as(StepVerifier::create)
+            .verifyError();
     }
 }

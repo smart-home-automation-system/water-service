@@ -77,6 +77,17 @@ the last whole minute of the counter (`by_minute`) are the flow; while neither i
 opens or closes - the offline alarm speaks for the valve. The reminders and the stored episodes are
 those of the alarms above (`water_alert`, kinds added by `V6`).
 
+**The regeneration of the softener is no leak** (HAS-399): it takes water from the mains, about
+0.5 l/min for two hours at 02:00 every few days, which had raised the continuous flow on the night of
+2026-11-09. A continuous flow or one of the empty house that started with a regeneration (seen from
+`regen_status_enum` of the iQua cloud, not 0 while it regenerates, from the time the cloud changed it)
+is judged from where the regeneration ended - raised only when the water runs on after it, the
+continuous flow for `continuous-after` from the end, the empty house for longer than the pause; a
+flow that starts near the time of the regeneration (`regen_time_secs`, 5 min before to 20 min after)
+waits up to 20 min for a reading of the cloud to say whether the softener regenerates. A high flow is
+never excused. Which value of the status a regeneration has is not seen yet - every start and end is
+logged with it.
+
 It also closes and opens the valve (HAS-321, `POST /home/water/valve`) - the one command that cuts
 the water of the whole house. **Closing on a leak is the owner's choice and off by default**
 (`water.flow.close-on-alarm: false`): when on, the first alert of a continuous flow or of water
@@ -174,6 +185,7 @@ the gateway, the writes are not authenticated - access is LAN / VPN only.
 | `GET` | `/home/water/softener/history?metric=&from=&to=` | The stored history of one metric of the softener — see below. |
 | `GET` | `/home/water/softener/days?from=&to=` | The litres through the softener per day — see below. |
 | `GET` | `/home/water/softener/regenerations?from=&to=` | The regenerations of the softener — see below. |
+| `GET` | `/home/water/softener/alerts` | The alerts the iQua cloud keeps of the softener — see below. |
 
 ## The water valve
 
@@ -479,6 +491,34 @@ regenerations come from the regeneration events of the cloud once an hour into `
   first; `endedAt` left out while a regeneration goes on.
 - `from` / `to` of the days and the regenerations are days (`YYYY-MM-DD`), both included, the last 30 days up to today by
   default, at most 366; those of the history are date-times (`YYYY-MM-DDTHH:MM`), `to` not included.
+
+### The alerts of the softener
+
+The house tells the owner on Discord of the softener as of every device (HAS-399), from the flags of each reading and
+whether the cloud hears it:
+
+| Alarm | Level | When | Reminder |
+|---|---|---|---|
+| Low salt | warn | `low_salt_alert` - the text names the per cent left and the days to run out | once a day |
+| Leak | error | `flow_monitor_alert`, the continuous flow the softener watches itself | hourly |
+| Excessive use of water | warn | `excessive_water_use_alert` | hourly |
+| Shutoff valve, resin, error | error | `water_shutoff_valve_alert`, `resin_alert`, `error_code_alert` | hourly |
+| Not heard | warn | no reading of the softener online - `online: false` or the cloud not answering - for `water.softener.offline-after` (30 min; it drops off Wi-Fi for minutes on its own) | hourly |
+
+A flag raised opens the alarm at that reading, the flag down in a reading ends it with one info naming how long it lasted.
+A flag the reading leaves out, no reading, or the flags of a softener the cloud says is offline decide nothing - unknown is
+never an alarm. The open episodes are rows of `water_alert` (kinds added by `V10`), so a restart repeats nothing; a
+notification that fails is logged and published with the next pass, it never stalls the pass.
+
+`GET /home/water/softener/alerts` answers the alerts the iQua cloud keeps - the list of the application:
+`[{"id", "type", "title", "message", "level", "at", "read"}]`, newest first, `at` in the time of the house, a field the
+cloud left out left out. The first page of 20, read when asked and kept for one read interval (the cloud blocks an account
+above about 1000 calls a day). `503 SOFTENER_UNAVAILABLE` before the softener was found on the account,
+`502 DEVICE_FAILED` when the cloud did not answer - kept for the interval as well.
+
+| Property | Default | Meaning |
+|---|---|---|
+| `water.softener.offline-after` | `PT30M` | no reading of the softener online for this long is the alarm (5 min - 24 h, a bare number is minutes) |
 
 ## Temperature history
 

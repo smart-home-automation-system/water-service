@@ -74,6 +74,12 @@ public class ValveException extends RuntimeException {
             "The water softener has not been read from the iQua cloud yet");
     }
 
+    //the alerts of the softener not read from the iQua cloud (HAS-399) - what it answered goes to the log only
+    public static ValveException softenerCloudFailed() {
+        return new ValveException(HttpStatus.BAD_GATEWAY, WaterError.DEVICE_FAILED,
+            "The iQua cloud did not answer the alerts of the softener");
+    }
+
     //status - what the valve answered, null when it did not answer
     public static ValveException deviceFailed(final Integer status) {
         return new ValveException(HttpStatus.BAD_GATEWAY, WaterError.DEVICE_FAILED, status == null

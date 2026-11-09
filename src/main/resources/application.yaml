@@ -137,6 +137,9 @@ water:
       email: ${iqua-email}
       password: ${iqua-password}
       interval: PT5M
+    # no reading of the softener online for this long is the offline alarm (HAS-399) - it drops off Wi-Fi for minutes on
+    # its own
+    offline-after: PT30M
 
 # the notifications of the alarms (HAS-319): the exchange is on the same broker as spring.rabbitmq.*, on its own virtual
 # host - a second connection (NotificationRabbitConfig); env is one of the two headers it routes by.

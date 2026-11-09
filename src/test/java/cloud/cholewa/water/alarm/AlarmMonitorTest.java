@@ -12,6 +12,7 @@ import cloud.cholewa.water.presence.PresenceClient;
 import cloud.cholewa.water.presence.ResidentPresence;
 import cloud.cholewa.water.registry.ValveRegistry;
 import cloud.cholewa.water.registry.WaterValve;
+import cloud.cholewa.water.softener.SoftenerTracker;
 import cloud.cholewa.water.valve.ValveProperties;
 import cloud.cholewa.water.valve.ValveTracker;
 import org.junit.jupiter.api.BeforeEach;
@@ -77,6 +78,7 @@ class AlarmMonitorTest {
     private final FlowTrack flowTrack = new FlowTrack(FLOW, VALVE);
     private final ValveTracker tracker = new ValveTracker(clock, flowTrack);
     private final PresenceClient presenceClient = mock(PresenceClient.class);
+    private final SoftenerTracker softenerTracker = new SoftenerTracker();
     private final ValveCommandService commandService = mock(ValveCommandService.class);
     private final WaterAlertRepository repository = mock(WaterAlertRepository.class);
     private final NotificationPublisher publisher = mock(NotificationPublisher.class);
@@ -96,8 +98,8 @@ class AlarmMonitorTest {
     }
 
     private AlarmMonitor monitor(final FlowProperties flow) {
-        return new AlarmMonitor(registry, tracker, flowTrack, presenceClient, commandService, repository, publisher,
-            PROPERTIES, flow, VALVE, clock);
+        return new AlarmMonitor(registry, tracker, flowTrack, presenceClient, softenerTracker, commandService, repository,
+            publisher, PROPERTIES, flow, VALVE, clock);
     }
 
     //close-on-alarm (HAS-321): the first alert of a continuous flow closes the valve and says so - once an episode,

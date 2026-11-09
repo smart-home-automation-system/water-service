@@ -30,7 +30,7 @@ public final class SoftenerSamples {
 
     public static SoftenerProperties properties(final URI baseUrl, final String serialNumber) {
         return new SoftenerProperties(serialNumber,
-            new SoftenerProperties.Cloud(baseUrl, "owner@example.com", "s3cr3t", Duration.ofMinutes(5)));
+            new SoftenerProperties.Cloud(baseUrl, "owner@example.com", "s3cr3t", Duration.ofMinutes(5)), Duration.ofMinutes(30));
     }
 
     //a JWT whose payload carries the exp; the signature is not checked by the client

@@ -1,9 +1,11 @@
 package cloud.cholewa.water.api;
 
+import cloud.cholewa.water.model.SoftenerAlertReply;
 import cloud.cholewa.water.model.SoftenerDayReply;
 import cloud.cholewa.water.model.SoftenerHistoryReply;
 import cloud.cholewa.water.model.SoftenerRegenerationReply;
 import cloud.cholewa.water.model.SoftenerReply;
+import cloud.cholewa.water.service.SoftenerAlertService;
 import cloud.cholewa.water.service.SoftenerHistoryService;
 import cloud.cholewa.water.service.SoftenerService;
 import lombok.RequiredArgsConstructor;
@@ -25,12 +27,21 @@ public class SoftenerController {
 
     private final SoftenerService softenerService;
     private final SoftenerHistoryService softenerHistoryService;
+    private final SoftenerAlertService softenerAlertService;
 
     @GetMapping("softener")
     Mono<ResponseEntity<SoftenerReply>> getSoftener() {
         return softenerService.current()
             .doOnSubscribe(subscription -> log.info("Querying the water softener"))
             .map(ResponseEntity::ok);
+    }
+
+    //the alerts the iQua cloud keeps (HAS-399), newest first
+    @GetMapping("softener/alerts")
+    Flux<SoftenerAlertReply> getAlerts() {
+        return softenerAlertService.alerts()
+            .doOnSubscribe(subscription -> log.info("Querying the alerts of the softener"))
+            .flatMapMany(Flux::fromIterable);
     }
 
     @GetMapping("softener/history")

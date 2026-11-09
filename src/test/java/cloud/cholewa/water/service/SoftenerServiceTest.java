@@ -33,7 +33,7 @@ class SoftenerServiceTest {
 
     private final SoftenerTracker tracker = mock(SoftenerTracker.class);
     private final SoftenerProperties properties = new SoftenerProperties(null, new SoftenerProperties.Cloud(
-        URI.create("http://localhost:1"), "owner@example.com", "s3cr3t", Duration.ofMinutes(5)));
+        URI.create("http://localhost:1"), "owner@example.com", "s3cr3t", Duration.ofMinutes(5)), Duration.ofMinutes(30));
 
     private SoftenerService serviceAt(final LocalDateTime now) {
         return new SoftenerService(tracker, properties, Clock.fixed(now.atZone(HOUSE).toInstant(), HOUSE));
