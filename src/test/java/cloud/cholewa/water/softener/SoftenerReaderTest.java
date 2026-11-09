@@ -4,6 +4,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import cloud.cholewa.water.database.repository.SoftenerRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -40,12 +42,14 @@ class SoftenerReaderTest {
     private final SoftenerSamples.MovableClock clock = new SoftenerSamples.MovableClock();
     private final IquaClient client = mock(IquaClient.class);
     private final SoftenerTracker tracker = new SoftenerTracker();
+    private final SoftenerRepository repository = mock(SoftenerRepository.class);
     private final ListAppender<ILoggingEvent> readerLog = new ListAppender<>();
     private SoftenerReader reader;
 
     @BeforeEach
     void setUp() {
-        reader = new SoftenerReader(client, tracker, SoftenerSamples.properties(CLOUD), clock);
+        when(repository.recordReading(any(), any())).thenReturn(Mono.just(true));
+        reader = new SoftenerReader(client, tracker, repository, SoftenerSamples.properties(CLOUD), clock);
         readerLog.start();
         ((Logger) LoggerFactory.getLogger(SoftenerReader.class)).addAppender(readerLog);
     }
@@ -94,7 +98,7 @@ class SoftenerReaderTest {
 
     @Test
     void should_pick_the_softener_of_the_serial_number() {
-        reader = new SoftenerReader(client, tracker, SoftenerSamples.properties(CLOUD, "SN2"), clock);
+        reader = new SoftenerReader(client, tracker, repository, SoftenerSamples.properties(CLOUD, "SN2"), clock);
         when(client.devices()).thenReturn(Mono.just(List.of(LISTED,
             new IquaDevice("dev-2", "SN2", "Second", "demand_softener", "thing-2", true, null, null))));
         when(client.detail("dev-2")).thenReturn(Mono.just(DETAIL));
@@ -209,13 +213,55 @@ class SoftenerReaderTest {
     //an empty variable of the manifest is no serial number: the first softener of the account
     @Test
     void should_take_a_blank_serial_number_as_none() {
-        reader = new SoftenerReader(client, tracker, SoftenerSamples.properties(CLOUD, " "), clock);
+        reader = new SoftenerReader(client, tracker, repository, SoftenerSamples.properties(CLOUD, " "), clock);
         when(client.devices()).thenReturn(Mono.just(List.of(LISTED)));
         when(client.detail("dev-1")).thenReturn(Mono.just(DETAIL));
 
         reader.read().as(StepVerifier::create).verifyComplete();
 
         assertThat(tracker.current().reachable()).isTrue();
+    }
+
+    //HAS-398: every reading stored - the repository decides whether it is a new row
+    @Test
+    void should_store_every_reading() {
+        when(client.devices()).thenReturn(Mono.just(List.of(LISTED)));
+        when(client.detail("dev-1")).thenReturn(Mono.just(DETAIL));
+
+        reader.read().as(StepVerifier::create).verifyComplete();
+
+        verify(repository).recordReading(SoftenerReading.of(DETAIL), LocalDateTime.of(2026, 11, 9, 10, 0));
+        assertThat(reader.deviceId()).contains("dev-1");
+    }
+
+    //a failed write is a WARN, never a missed read
+    @Test
+    void should_keep_the_reading_when_it_cannot_be_stored() {
+        when(repository.recordReading(any(), any())).thenReturn(Mono.error(new IllegalStateException("database down")));
+        when(client.devices()).thenReturn(Mono.just(List.of(LISTED)));
+        when(client.detail("dev-1")).thenReturn(Mono.just(DETAIL));
+
+        reader.read().as(StepVerifier::create).verifyComplete();
+
+        assertThat(tracker.current().reachable()).isTrue();
+        assertThat(tracker.current().missed()).isZero();
+        assertThat(warnings()).singleElement().satisfies(event -> assertThat(event.getFormattedMessage())
+            .startsWith("The reading of the softener could not be stored"));
+    }
+
+    //the reading arrived and only its write hangs: the bound cuts the pass, the read is not missed
+    @Test
+    void should_not_count_a_pass_cut_while_storing_as_missed() {
+        when(repository.recordReading(any(), any())).thenReturn(Mono.never());
+        when(client.devices()).thenReturn(Mono.just(List.of(LISTED)));
+        when(client.detail("dev-1")).thenReturn(Mono.just(DETAIL));
+
+        StepVerifier.withVirtualTime(() -> reader.read())
+            .thenAwait(SoftenerReader.LIMIT)
+            .verifyComplete();
+
+        assertThat(tracker.current().missed()).isZero();
+        assertThat(tracker.current().reading()).isNotNull();
     }
 
     //a read that hangs is cut off by the bound of the pass and counts as missed

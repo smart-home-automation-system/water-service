@@ -117,6 +117,31 @@ public class IquaClient {
         }
     }
 
+    //one page of the regenerations of a device (HAS-398), as the cloud orders them; an answer without the list of data is
+    //not the model
+    public Mono<IquaRegenerationPage> regenerations(final String deviceId, final int page, final int perPage) {
+        return call(value -> webClient.get()
+                .uri(uri -> uri.path("/devices/" + deviceId + "/regeneration-events")
+                    .queryParam("page", page)
+                    .queryParam("per_page", perPage)
+                    .build())
+                .header("Authorization", "Bearer " + value)
+                .accept(MediaType.APPLICATION_JSON), "the regenerations")
+            .flatMap(root -> Mono.justOrEmpty(Optional.of(root.path("data")).filter(JsonNode::isArray))
+                .switchIfEmpty(Mono.error(() -> new IquaException("The iQua cloud answered no list of the regenerations")))
+                .map(data -> new IquaRegenerationPage(StreamSupport.stream(data.spliterator(), false)
+                    .map(event -> regeneration(event))
+                    .toList(), root.path("total").asLong(0))));
+    }
+
+    private IquaRegeneration regeneration(final JsonNode event) {
+        try {
+            return jsonMapper.convertValue(event, IquaRegeneration.class);
+        } catch (final RuntimeException notTheModel) {
+            throw new IquaException("The iQua cloud answered the regenerations not as their model");
+        }
+    }
+
     private Mono<JsonNode> get(final String path, final String what) {
         return call(value -> webClient.get()
             .uri(uri -> uri.path(path).build())

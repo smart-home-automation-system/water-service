@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -338,6 +339,37 @@ class IquaClientTest {
             server.takeRequest();
         }
         assertThat(server.takeRequest().getUrl().encodedPath()).isEqualTo("/v1/auth/login");
+    }
+
+    //HAS-398: one page of the regenerations, the page and its size as parameters of the query
+    @Test
+    void should_read_a_page_of_the_regenerations() throws InterruptedException {
+        server.enqueue(token(first(), "refresh-1"));
+        server.enqueue(json("""
+            {"data":[{"id":"r1","start_time":"2026-11-09T01:00:00Z","end_time":null,
+              "device_start_time":"2026-11-09T02:00:00Z","device_start_time_display":"02:00"}],
+             "page":2,"per_page":20,"total":21}"""));
+
+        client.regenerations("dev-1", 2, 20).as(StepVerifier::create)
+            .expectNext(new IquaRegenerationPage(List.of(new IquaRegeneration("r1", "2026-11-09T01:00:00Z", null,
+                "2026-11-09T02:00:00Z")), 21))
+            .verifyComplete();
+
+        server.takeRequest();
+        final RecordedRequest read = server.takeRequest();
+        assertThat(read.getUrl().encodedPath()).isEqualTo("/v1/devices/dev-1/regeneration-events");
+        assertThat(read.getUrl().queryParameter("page")).isEqualTo("2");
+        assertThat(read.getUrl().queryParameter("per_page")).isEqualTo("20");
+    }
+
+    @Test
+    void should_fail_on_regenerations_that_are_not_the_model() {
+        server.enqueue(token(first(), "refresh-1"));
+        server.enqueue(json("{\"page\":1}"));
+
+        client.regenerations("dev-1", 1, 20).as(StepVerifier::create)
+            .expectErrorMessage("The iQua cloud answered no list of the regenerations")
+            .verify();
     }
 
     @Test

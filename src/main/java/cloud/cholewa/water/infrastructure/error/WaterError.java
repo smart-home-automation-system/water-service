@@ -42,7 +42,10 @@ public enum WaterError implements ErrorId {
     TANK_COLD("Hot water tank too cold"),
 
     //the softener has not been read from the iQua cloud since the start (HAS-397)
-    SOFTENER_UNAVAILABLE("Water softener unavailable");
+    SOFTENER_UNAVAILABLE("Water softener unavailable"),
+
+    //a metric of the history of the softener that is not one of SoftenerMetric (HAS-398)
+    UNKNOWN_METRIC("Unknown metric");
 
     private final String description;
 }

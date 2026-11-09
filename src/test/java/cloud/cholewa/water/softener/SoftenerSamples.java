@@ -42,7 +42,11 @@ public final class SoftenerSamples {
     }
 
     public static String detail() {
-        try (InputStream stream = SoftenerSamples.class.getResourceAsStream("/iqua/detail-or-summary.json")) {
+        return resource("/iqua/detail-or-summary.json");
+    }
+
+    public static String resource(final String path) {
+        try (InputStream stream = SoftenerSamples.class.getResourceAsStream(path)) {
             return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
         } catch (final IOException failure) {
             throw new UncheckedIOException(failure);

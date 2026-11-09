@@ -171,6 +171,9 @@ the gateway, the writes are not authenticated - access is LAN / VPN only.
 | `POST` | `/home/water/circulation?source=` | Start a run of the circulation pump — see below. |
 | `GET` | `/home/water/circulation/runs?from=&to=` | The runs the service started — see below. |
 | `GET` | `/home/water/softener` | The water softener now, from the iQua cloud — see below. |
+| `GET` | `/home/water/softener/history?metric=&from=&to=` | The stored history of one metric of the softener — see below. |
+| `GET` | `/home/water/softener/days?from=&to=` | The litres through the softener per day — see below. |
+| `GET` | `/home/water/softener/regenerations?from=&to=` | The regenerations of the softener — see below. |
 
 ## The water valve
 
@@ -455,6 +458,27 @@ none for 30 minutes: the cloud blocks an account above about 1000 calls a day.
 | `water.softener.cloud.interval` | `PT5M` | the read of the softener (1 - 60 min, a bare number is minutes) |
 | `water.softener.serial-number` | none | one softener of several on the account; without it the first one |
 | `water.softener.cloud.base-url` | `https://api.myiquaapp.com/v1` | the API of the iQua application |
+
+### The history of the softener
+
+The iQua application shows only today and the last regeneration; the service keeps its own history (HAS-398). Every read
+is stored in `softener_reading` - a row only when a value changed, otherwise the latest row is checked again - and the
+regenerations come from the regeneration events of the cloud once an hour into `softener_regeneration`. Both are kept
+730 days (`water.meter.retention`, the same nightly pass as the counter of the valve).
+
+- `GET /home/water/softener/history?metric=&from=&to=` - one metric over a range: `saltLevel` (%), `waterUsedToday`,
+  `totalWater`, `treatedWaterAvailable` (litres), `flow` (l/min), `hardness` (gpg). The shape of the weather history:
+  `{"metric", "from", "to", "bucketSeconds", "points": [{"at", "avg", "min", "max"}]}`. At most 366 days; buckets of
+  5 min up to 2 days, 30 min up to 8, 2 h up to 31, a day beyond. A row is stored on a change only, so a bucket without a
+  change has no point. A metric not in the list is `400 UNKNOWN_METRIC`, a range that breaks a rule `400 INVALID_RANGE`.
+- `GET /home/water/softener/days?from=&to=` - `[{"day": "2026-11-08", "litres": 310.0}]`, the litres through the softener
+  per day of the house from the deltas of its counter (a drop is a reset, never a negative volume; a day not read has no
+  entry). Beside the day of the water meter (`GET /home/water/consumption`) the difference is the water that did not go
+  through the softener - the bypass, the garden.
+- `GET /home/water/softener/regenerations?from=&to=` - `[{"startedAt", "endedAt", "deviceStartedAt", "running"}]`, newest
+  first; `endedAt` left out while a regeneration goes on.
+- `from` / `to` of the days and the regenerations are days (`YYYY-MM-DD`), both included, the last 30 days up to today by
+  default, at most 366; those of the history are date-times (`YYYY-MM-DDTHH:MM`), `to` not included.
 
 ## Temperature history
 

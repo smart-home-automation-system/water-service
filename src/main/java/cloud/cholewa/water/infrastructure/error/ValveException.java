@@ -64,6 +64,11 @@ public class ValveException extends RuntimeException {
             "The tank is at " + tank + " C, below " + tankMin + " C");
     }
 
+    public static ValveException unknownMetric(final String metric) {
+        return new ValveException(HttpStatus.BAD_REQUEST, WaterError.UNKNOWN_METRIC,
+            "There is no metric '" + metric + "' of the softener");
+    }
+
     public static ValveException softenerUnavailable() {
         return new ValveException(HttpStatus.SERVICE_UNAVAILABLE, WaterError.SOFTENER_UNAVAILABLE,
             "The water softener has not been read from the iQua cloud yet");
