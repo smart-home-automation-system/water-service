@@ -17,7 +17,7 @@ import java.util.Optional;
 //without a number is nothing. Without I/O - pinned by LiveFrameTest
 public record LiveFrame(double litresPerMinute, Instant at) {
 
-    static final String FLOW = "current_water_flow_gpm";
+    static final String FLOW_PROPERTY = "current_water_flow_gpm";
 
     static Optional<LiveFrame> flow(final String text, final JsonMapper jsonMapper) {
         final JsonNode frame;
@@ -27,7 +27,7 @@ public record LiveFrame(double litresPerMinute, Instant at) {
             return Optional.empty();
         }
         final JsonNode converted = frame.path("converted_property");
-        if (!"property".equals(frame.path("type").asString("")) || !FLOW.equals(frame.path("name").asString(""))
+        if (!"property".equals(frame.path("type").asString("")) || !FLOW_PROPERTY.equals(frame.path("name").asString(""))
             || !converted.path("units").asString("").trim().toLowerCase(Locale.ROOT).startsWith("liter")
             || !converted.path("value").isNumber()) {
             return Optional.empty();

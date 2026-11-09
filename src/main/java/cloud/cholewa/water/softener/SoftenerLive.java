@@ -18,14 +18,16 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 
-//The live stream of the softener (HAS-401): the cloud refreshes the flow only while a client keeps its stream open, so a
-//PUT /softener/live opens it - GET /devices/{id}/live, then the WebSocket at its websocket_uri on the host of the cloud -
-//and holds it for water.softener.live-for. One at most: a second open extends it; a close, the end of its time and the
-//shutdown of the pod close it. Every frame of the flow (LiveFrame) updates the reading in memory (SoftenerTracker.live);
-//nothing is stored - the reads of every five minutes keep the history. The address carries a token of its own and is never
-//logged; the socket is not built on the WebClient, so Logbook does not see it either. A socket that ends of itself or fails
-//is one WARN and is not opened again by itself. The stream is throttled by the cloud: a 429 of /live goes to the caller as
-//IquaException(429), never retried. Pinned by SoftenerLiveTest
+/**
+ * The live stream of the softener (HAS-401). The cloud refreshes the flow only while a client keeps its stream open, so
+ * the PUT of the live stream opens it - the live address of the device first, then the WebSocket at that address on the
+ * host of the cloud - and holds it for water.softener.live-for. One at most: a second open extends it; a close, the end of
+ * its time and the shutdown of the pod close it. Every frame of the flow (LiveFrame) updates the reading in memory
+ * (SoftenerTracker.live); nothing is stored - the reads of every five minutes keep the history. The address carries a token
+ * of its own and is never logged; the socket is not built on the WebClient, so Logbook does not see it either. A socket
+ * that ends of itself or fails is one WARN and is not opened again by itself. The stream is throttled by the cloud: its
+ * 429 goes to the caller as an IquaException with that status, never retried. Pinned by SoftenerLiveTest.
+ */
 @Slf4j
 @Component
 public class SoftenerLive {
