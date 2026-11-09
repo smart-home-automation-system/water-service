@@ -20,13 +20,16 @@ import java.time.temporal.ChronoUnit;
 //cloud.interval - the read of the softener (PT5M; 1 - 60 min, a bare number is minutes - the cloud blocks an account above
 //about 1000 calls a day)
 //offlineAfter - no reading of the softener online for this long is the offline alarm (PT30M; 5 min - 24 h, a bare number
-//is minutes - HAS-399; the softener drops off Wi-Fi for minutes on its own). Pinned by SoftenerPropertiesTest
+//is minutes - HAS-399; the softener drops off Wi-Fi for minutes on its own)
+//liveFor - how long the live stream of the softener is held after a PUT /softener/live (PT5M; 1 - 10 min, a bare number is
+//minutes - HAS-401; the cloud throttles the stream). Pinned by SoftenerPropertiesTest
 @Validated
 @ConfigurationProperties(prefix = "water.softener")
 public record SoftenerProperties(
     String serialNumber,
     @NotNull @Valid Cloud cloud,
-    @NotNull @DurationUnit(ChronoUnit.MINUTES) @DurationMin(minutes = 5) @DurationMax(hours = 24) Duration offlineAfter
+    @NotNull @DurationUnit(ChronoUnit.MINUTES) @DurationMin(minutes = 5) @DurationMax(hours = 24) Duration offlineAfter,
+    @NotNull @DurationUnit(ChronoUnit.MINUTES) @DurationMin(minutes = 1) @DurationMax(minutes = 10) Duration liveFor
 ) {
 
     public record Cloud(

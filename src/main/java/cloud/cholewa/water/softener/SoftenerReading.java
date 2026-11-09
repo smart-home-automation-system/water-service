@@ -53,6 +53,13 @@ public record SoftenerReading(
     ) {
     }
 
+    //the same reading with the flow of a frame of the live stream (HAS-401)
+    SoftenerReading withFlow(final double litresPerMinute) {
+        return new SoftenerReading(online, usedTodayLitres, averageDailyLitres, treatedAvailableLitres, totalLitres,
+            litresPerMinute, saltLevelPercent, saltDaysLeft, daysSinceRegeneration, totalRegenerations, hardnessGpg,
+            daysInOperation, signalDbm, alerts);
+    }
+
     //online - the property _internal_is_online, or is_online of the device when the answer has no such property
     static SoftenerReading of(final IquaDevice device) {
         final Map<String, IquaProperty> properties = Optional.ofNullable(device.properties()).orElse(Map.of());

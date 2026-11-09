@@ -5,6 +5,7 @@ import cloud.cholewa.water.infrastructure.error.WaterError;
 import cloud.cholewa.water.model.SoftenerReply;
 import cloud.cholewa.water.softener.SoftenerProperties;
 import cloud.cholewa.water.softener.SoftenerReading;
+import cloud.cholewa.water.softener.SoftenerLive;
 import cloud.cholewa.water.softener.SoftenerTracker;
 import org.junit.jupiter.api.Test;
 import reactor.test.StepVerifier;
@@ -32,11 +33,13 @@ class SoftenerServiceTest {
         38, 3, 412, 14.0, 950, -58, new SoftenerReading.Alerts(false, false, false, false, false, false));
 
     private final SoftenerTracker tracker = mock(SoftenerTracker.class);
+    private final SoftenerLive live = mock(SoftenerLive.class);
     private final SoftenerProperties properties = new SoftenerProperties(null, new SoftenerProperties.Cloud(
-        URI.create("http://localhost:1"), "owner@example.com", "s3cr3t", Duration.ofMinutes(5)), Duration.ofMinutes(30));
+        URI.create("http://localhost:1"), "owner@example.com", "s3cr3t", Duration.ofMinutes(5)), Duration.ofMinutes(30),
+            Duration.ofMinutes(5));
 
     private SoftenerService serviceAt(final LocalDateTime now) {
-        return new SoftenerService(tracker, properties, Clock.fixed(now.atZone(HOUSE).toInstant(), HOUSE));
+        return new SoftenerService(tracker, properties, live, Clock.fixed(now.atZone(HOUSE).toInstant(), HOUSE));
     }
 
     @Test
@@ -59,7 +62,21 @@ class SoftenerServiceTest {
                 new SoftenerReply.Salt(45.0, 38, LocalDate.of(2026, 12, 17)),
                 new SoftenerReply.Regeneration(3, LocalDate.of(2026, 11, 6), 412, null),
                 14.0, 239.7, 950, -58,
-                new SoftenerReply.Alerts(false, false, false, false, false, false))))
+                new SoftenerReply.Alerts(false, false, false, false, false, false), false, null)))
+            .verifyComplete();
+    }
+
+    //HAS-401: the live stream open - until when, on the clock of the house
+    @Test
+    void should_say_the_live_stream_is_open_until_when() {
+        when(tracker.current()).thenReturn(new SoftenerTracker.State(READING, READ, READ_AT, true, 0));
+        when(live.until()).thenReturn(java.util.Optional.of(READ_AT.plusSeconds(300)));
+
+        serviceAt(READ.plusMinutes(1)).current().as(StepVerifier::create)
+            .assertNext(reply -> {
+                assertThat(reply.live()).isTrue();
+                assertThat(reply.liveUntil()).isEqualTo(READ.plusMinutes(5));
+            })
             .verifyComplete();
     }
 

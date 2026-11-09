@@ -7,10 +7,12 @@ import cloud.cholewa.water.model.SoftenerCommandReply;
 import cloud.cholewa.water.model.SoftenerReply;
 import cloud.cholewa.water.model.SoftenerDayReply;
 import cloud.cholewa.water.model.SoftenerHistoryReply;
+import cloud.cholewa.water.model.SoftenerLiveReply;
 import cloud.cholewa.water.model.SoftenerRegenerationReply;
 import cloud.cholewa.water.service.SoftenerAlertService;
 import cloud.cholewa.water.service.SoftenerCommandService;
 import cloud.cholewa.water.service.SoftenerHistoryService;
+import cloud.cholewa.water.service.SoftenerLiveService;
 import cloud.cholewa.water.service.SoftenerService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -50,6 +52,9 @@ class SoftenerControllerTest {
 
     @MockitoBean
     private SoftenerCommandService softenerCommandService;
+
+    @MockitoBean
+    private SoftenerLiveService softenerLiveService;
 
     //HAS-398: the history of a metric - the shape of the weather and the hot-water histories
     @Test
@@ -125,7 +130,8 @@ class SoftenerControllerTest {
             new SoftenerReply.Salt(45.0, 38, LocalDate.of(2026, 12, 17)),
             new SoftenerReply.Regeneration(3, LocalDate.of(2026, 11, 6), 412, "scheduled"),
             14.0, 239.7, 950, -58,
-            new SoftenerReply.Alerts(false, true, false, false, false, false))));
+            new SoftenerReply.Alerts(false, true, false, false, false, false), true,
+            LocalDateTime.of(2026, 11, 9, 10, 5))));
 
         webTestClient.get()
             .uri("/softener")
@@ -146,7 +152,9 @@ class SoftenerControllerTest {
                   "daysInOperation": 950,
                   "signalDbm": -58,
                   "alerts": {"lowSalt": false, "leak": true, "excessiveWaterUse": false, "shutoffValve": false,
-                             "resin": false, "error": false}
+                             "resin": false, "error": false},
+                  "live": true,
+                  "liveUntil": "2026-11-09T10:05:00"
                 }
                 """, JsonCompareMode.STRICT);
     }
@@ -160,7 +168,7 @@ class SoftenerControllerTest {
             new SoftenerReply.Salt(null, null, null),
             new SoftenerReply.Regeneration(null, null, null, null),
             null, null, null, null,
-            new SoftenerReply.Alerts(null, null, null, null, null, null))));
+            new SoftenerReply.Alerts(null, null, null, null, null, null), false, null)));
 
         webTestClient.get()
             .uri("/softener")
@@ -168,7 +176,7 @@ class SoftenerControllerTest {
             .expectStatus().isOk()
             .expectBody().json("""
                 {"reachable": false, "measuredAt": "2026-11-09T10:00:00", "stale": true, "water": {}, "salt": {},
-                 "regeneration": {}, "alerts": {}}
+                 "regeneration": {}, "alerts": {}, "live": false}
                 """, JsonCompareMode.STRICT);
     }
 
@@ -258,6 +266,43 @@ class SoftenerControllerTest {
             .uri("/softener/regeneration")
             .exchange()
             .expectStatus().is4xxClientError();
+    }
+
+    //HAS-401: the live stream opened until when, closed with no body
+    @Test
+    void should_open_the_live_stream() {
+        when(softenerLiveService.open()).thenReturn(Mono.just(new SoftenerLiveReply(true,
+            LocalDateTime.of(2026, 11, 9, 19, 5))));
+
+        webTestClient.put()
+            .uri("/softener/live")
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody().json("""
+                {"live": true, "liveUntil": "2026-11-09T19:05:00"}
+                """, JsonCompareMode.STRICT);
+    }
+
+    @Test
+    void should_answer_429_when_the_cloud_throttles_the_live_stream() {
+        when(softenerLiveService.open()).thenReturn(Mono.error(ValveException.liveThrottled()));
+
+        webTestClient.put()
+            .uri("/softener/live")
+            .exchange()
+            .expectStatus().isEqualTo(429)
+            .expectBody()
+            .jsonPath("$.errors[0].code").isEqualTo("LIVE_THROTTLED");
+    }
+
+    @Test
+    void should_close_the_live_stream() {
+        when(softenerLiveService.close()).thenReturn(Mono.empty());
+
+        webTestClient.delete()
+            .uri("/softener/live")
+            .exchange()
+            .expectStatus().isNoContent();
     }
 
     //HAS-399: the alerts of the iQua cloud for the alerts card of the dashboard, a field it left out left out

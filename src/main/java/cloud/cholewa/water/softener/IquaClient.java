@@ -137,6 +137,17 @@ public class IquaClient {
                     .toList(), root.path("total").asLong(0))));
     }
 
+    //the address of the live stream of a device (HAS-401): GetDeviceLiveDataOutputBody {websocket_uri}, a path with its own
+    //token - never logged by the caller; the call is throttled by the cloud (429)
+    public Mono<String> liveUri(final String deviceId) {
+        return get(DEVICES + deviceId + "/live", "the live stream")
+            .flatMap(root -> Mono.justOrEmpty(Optional.of(root.path("websocket_uri"))
+                    .filter(JsonNode::isString)
+                    .map(JsonNode::asString)
+                    .filter(uri -> uri.startsWith("/")))
+                .switchIfEmpty(Mono.error(() -> new IquaException("The iQua cloud gave no address of the live stream"))));
+    }
+
     //a command of a device (HAS-400) - DeviceCommandInputBody {function, action} of its OpenAPI, the pairs the device offers
     //in the actions of its detail (iqua/detail-scheduled.json); the answer DeviceCommandOutputBody {status, message}. Sent
     //once - a 401 takes a new token and calls once more, as every call; nothing else is retried

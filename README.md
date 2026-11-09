@@ -189,6 +189,8 @@ the gateway, the writes are not authenticated - access is LAN / VPN only.
 | `GET` | `/home/water/softener/alerts` | The alerts the iQua cloud keeps of the softener — see below. |
 | `POST` | `/home/water/softener/regeneration?when=now|tonight` | Start a regeneration now (default) or tonight at 02:00 — see below. |
 | `DELETE` | `/home/water/softener/regeneration` | Cancel the regeneration scheduled for tonight — see below. |
+| `PUT` | `/home/water/softener/live` | Open the live stream of the softener (or extend the one open) — see below. |
+| `DELETE` | `/home/water/softener/live` | Close the live stream. |
 
 ## The water valve
 
@@ -538,6 +540,26 @@ The only write of the house on the softener (HAS-400) - before guests, after a r
   with its status alone - it counts for the minute, it may have been carried out.
 - No row of its own: the regeneration it starts is seen in `GET /softener/regenerations`, a scheduled one as
   `regeneration.status: "scheduled"` of `GET /softener` after the next read (5 min).
+
+### The live flow
+
+The cloud refreshes the flow of the softener only while a client keeps its live stream open (HAS-401), so the flow of
+`GET /softener` is otherwise what the cloud last had:
+
+- `PUT /home/water/softener/live` - `{"live": true, "liveUntil"}`: the service opens the stream (`GET /devices/{id}/live`, then
+  the WebSocket at its address on the host of the cloud) and holds it for `water.softener.live-for` (5 min); a second `PUT`
+  extends it from then, one stream at most. `DELETE /home/water/softener/live` (204) closes it; so do the end of its time and
+  the shutdown of the pod.
+- Every frame of the flow (`current_water_flow_gpm`, its converted litres a minute) updates the flow and `measuredAt` of
+  `GET /softener`, which says `live: true` and `liveUntil` while the stream is open. Nothing is stored - the reads of every
+  five minutes keep the history.
+- The address carries a token of its own and is never logged. The cloud throttles the stream ("not for continuous data
+  retrieval"): its 429 is `429 LIVE_THROTTLED`, never retried; `503 SOFTENER_UNAVAILABLE` before the softener was found,
+  `502 DEVICE_FAILED` when the stream did not open. A stream the cloud closes is one WARN and is not opened again by itself.
+
+| Property | Default | Meaning |
+|---|---|---|
+| `water.softener.live-for` | `PT5M` | how long a `PUT` holds the stream (1 - 10 min, a bare number is minutes) |
 
 ## Temperature history
 

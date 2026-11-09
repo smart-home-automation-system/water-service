@@ -21,7 +21,9 @@ import java.time.LocalDateTime;
  * {@code status} - the words of the cloud for it now ({@code none}, {@code scheduled}, ...; HAS-400).<br>
  * {@code hardnessGpg} - the hardness set on the softener in grains per gallon; {@code hardnessMgCaco3} the same in mg/l
  * of CaCO3.<br>
- * {@code alerts} - the flags of the softener; {@code leak} is its own watch of a continuous flow.
+ * {@code alerts} - the flags of the softener; {@code leak} is its own watch of a continuous flow.<br>
+ * {@code live} - the live stream of the softener is open (HAS-401) - the flow moves as it happens - until
+ * {@code liveUntil}, left out while it is closed.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record SoftenerReply(
@@ -36,7 +38,9 @@ public record SoftenerReply(
     Double hardnessMgCaco3,
     Integer daysInOperation,
     Integer signalDbm,
-    Alerts alerts
+    Alerts alerts,
+    Boolean live,
+    LocalDateTime liveUntil
 ) {
 
     @JsonInclude(JsonInclude.Include.NON_NULL)

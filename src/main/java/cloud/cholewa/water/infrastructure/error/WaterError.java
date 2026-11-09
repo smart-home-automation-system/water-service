@@ -55,7 +55,10 @@ public enum WaterError implements ErrorId {
     REGENERATION_IN_PROGRESS("Regeneration in progress"),
 
     //a command of the softener within a minute of the last one - one a minute at most (HAS-400)
-    COMMAND_TOO_SOON("Command too soon");
+    COMMAND_TOO_SOON("Command too soon"),
+
+    //the iQua cloud refused the live stream of the softener for its throttle (429) - never retried (HAS-401)
+    LIVE_THROTTLED("Live stream throttled");
 
     private final String description;
 }

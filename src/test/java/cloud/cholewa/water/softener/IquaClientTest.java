@@ -372,6 +372,40 @@ class IquaClientTest {
             .verify();
     }
 
+    //HAS-401: the address of the live stream - a path with its own token
+    @Test
+    void should_read_the_address_of_the_live_stream() throws InterruptedException {
+        server.enqueue(token(first(), "refresh-1"));
+        server.enqueue(json("{\"websocket_uri\":\"/v1/devices/dev-1/live/ws?p=s3cr3t\"}"));
+
+        client.liveUri("dev-1").as(StepVerifier::create)
+            .expectNext("/v1/devices/dev-1/live/ws?p=s3cr3t")
+            .verifyComplete();
+
+        server.takeRequest();
+        assertThat(server.takeRequest().getUrl().encodedPath()).isEqualTo("/v1/devices/dev-1/live");
+    }
+
+    @Test
+    void should_fail_without_an_address_of_the_live_stream() {
+        server.enqueue(token(first(), "refresh-1"));
+        server.enqueue(json("{\"websocket_uri\":\"wss://elsewhere.example/ws\"}"));
+
+        client.liveUri("dev-1").as(StepVerifier::create)
+            .expectErrorMessage("The iQua cloud gave no address of the live stream")
+            .verify();
+    }
+
+    @Test
+    void should_fail_a_throttled_live_stream_with_its_status() {
+        server.enqueue(token(first(), "refresh-1"));
+        server.enqueue(status(429));
+
+        client.liveUri("dev-1").as(StepVerifier::create)
+            .expectErrorSatisfies(failure -> assertThat(((IquaException) failure).getStatus()).isEqualTo(429))
+            .verify();
+    }
+
     //HAS-400: a command - PUT with the function and the action of the device, the answer of the cloud as it words it
     @Test
     void should_send_a_command_of_the_device() throws InterruptedException {

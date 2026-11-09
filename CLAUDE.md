@@ -9,7 +9,7 @@ the consumption by day, week, month and year on `GET /home/water/consumption`; s
 the waterworks compared with what the house measured, and the daily history imported from the Shelly cloud; since HAS-319
 the alarms of the mains, the valve and frost, and since HAS-320 those of the flow - high, continuous, in an empty house; since
 HAS-404 the circulation pump of the hot water (relay 1 of the Shelly Uni): its state and a manual start, and since HAS-405 its
-automation (the motion and the lights of the bathrooms, comfort windows); since HAS-397 the water softener, read from the iQua cloud, and since HAS-398 its history, days and regenerations, since HAS-399 its alerts - and its regeneration no longer raises the flow alarms, since HAS-400 a regeneration on demand.
+automation (the motion and the lights of the bathrooms, comfort windows); since HAS-397 the water softener, read from the iQua cloud, and since HAS-398 its history, days and regenerations, since HAS-399 its alerts - and its regeneration no longer raises the flow alarms, since HAS-400 a regeneration on demand, since HAS-401 its live flow.
 
 Part of the smart-home-automation-system organization — org-wide conventions, the
 repository map and working rules come from the workspace-level context
@@ -17,7 +17,7 @@ repository map and working rules come from the workspace-level context
 repository themselves; Claude's default role here is analysis, code review and security
 review - the owner had Claude implement the readings of the water valve (HAS-316), the consumption
 (HAS-317), the bills (HAS-318), the alarms (HAS-319, HAS-320), the command of the valve (HAS-321) and the circulation pump
-(HAS-404, HAS-405) and the water softener (HAS-397 - HAS-400) and reviews them
+(HAS-404, HAS-405) and the water softener (HAS-397 - HAS-401) and reviews them
 in IntelliJ.
 
 ## Role in the system
@@ -440,6 +440,20 @@ in IntelliJ.
       the first one on an evening agreed with the owner (DoD of HAS-400).
     - `GET /softener` carries `regeneration.status` (the words of the cloud, `SoftenerTracker.regenerationStatus`) for the cancel
       button of the dashboard.
+  - **The live flow** (HAS-401, `SoftenerLive`, `LiveFrame`, `SoftenerLiveService`, `SoftenerLiveConfig`) - what is easy to break:
+    - **The cloud refreshes the flow only while a client holds its stream**: `PUT /softener/live` reads `GET /devices/{id}/live`
+      (`websocket_uri`, a path with a token of its own - `?p=`) and opens the WebSocket at `wss://` + the host of
+      `cloud.base-url` + that path (Reactor Netty `WebSocketClient`, a bean of its own - **not the WebClient**, so Logbook never
+      logs the address); held for `water.softener.live-for` (PT5M), one at most, a second PUT extends it from then (no new
+      address read), closed by `DELETE`, by its timer and at `@PreDestroy`. A socket the cloud closes or fails is one WARN and
+      forgotten; never reopened by itself. The handshake waits `OPEN_TIMEOUT` (10 s), then 502.
+    - **The frames** (captured from the real socket on 2026-11-09, `iqua/live-frames.json`, by
+      `scripts/iqua/read-softener.ps1 -LiveFile` of deployment-tools): `{name, type: property, value, converted_property, timestamp}`
+      - `app_active`, `service_active`, `current_water_flow_gpm`, `rf_signal_*`, `current_time_secs`; only the flow is taken,
+      by `converted_property.value` in `liters/min` (`value` is tenths of a gpm). It updates the flow and `measuredAt` of the
+      reading in memory (`SoftenerTracker.live`) - **never stored**, a frame older than the reading changes nothing. The capture
+      had only a flow of 0 - the flow moving with a tap open is checked after the deploy (DoD).
+    - `/live` is throttled by the cloud: 429 is `429 LIVE_THROTTLED`, never retried. `GET /softener` has `live` / `liveUntil`.
   - **Rehearsed** (2026-11-04): the released 0.6.1 image applied V1-V2 on a throwaway PostgreSQL with SSL (a user
     with `USAGE, CREATE` on `public` only), the new jar V3 with the real valve and the registry through a
     port-forward, no broker: `/valve` answered the valve within 10 s, a row of the counter a change, the same

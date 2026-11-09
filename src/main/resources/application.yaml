@@ -140,6 +140,8 @@ water:
     # no reading of the softener online for this long is the offline alarm (HAS-399) - it drops off Wi-Fi for minutes on
     # its own
     offline-after: PT30M
+    # how long the live stream of the softener is held after PUT /softener/live (HAS-401; 1 - 10 min, the cloud throttles it)
+    live-for: PT5M
 
 # the notifications of the alarms (HAS-319): the exchange is on the same broker as spring.rabbitmq.*, on its own virtual
 # host - a second connection (NotificationRabbitConfig); env is one of the two headers it routes by.

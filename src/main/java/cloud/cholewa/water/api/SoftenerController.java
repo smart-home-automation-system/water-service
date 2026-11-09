@@ -4,11 +4,13 @@ import cloud.cholewa.water.model.SoftenerAlertReply;
 import cloud.cholewa.water.model.SoftenerCommandReply;
 import cloud.cholewa.water.model.SoftenerDayReply;
 import cloud.cholewa.water.model.SoftenerHistoryReply;
+import cloud.cholewa.water.model.SoftenerLiveReply;
 import cloud.cholewa.water.model.SoftenerRegenerationReply;
 import cloud.cholewa.water.model.SoftenerReply;
 import cloud.cholewa.water.service.SoftenerAlertService;
 import cloud.cholewa.water.service.SoftenerCommandService;
 import cloud.cholewa.water.service.SoftenerHistoryService;
+import cloud.cholewa.water.service.SoftenerLiveService;
 import cloud.cholewa.water.service.SoftenerService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,6 +18,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -35,6 +38,7 @@ public class SoftenerController {
     private final SoftenerHistoryService softenerHistoryService;
     private final SoftenerAlertService softenerAlertService;
     private final SoftenerCommandService softenerCommandService;
+    private final SoftenerLiveService softenerLiveService;
 
     @GetMapping("softener")
     Mono<ResponseEntity<SoftenerReply>> getSoftener() {
@@ -57,6 +61,21 @@ public class SoftenerController {
         return softenerCommandService.cancel()
             .doOnSubscribe(subscription -> log.info("Cancelling the scheduled regeneration of the softener"))
             .map(reply -> ResponseEntity.status(HttpStatus.ACCEPTED).body(reply));
+    }
+
+    //the live stream of the softener (HAS-401): opened, or extended when open; a PUT - it opens a socket to the cloud
+    @PutMapping("softener/live")
+    Mono<ResponseEntity<SoftenerLiveReply>> openLive() {
+        return softenerLiveService.open()
+            .doOnSubscribe(subscription -> log.info("Opening the live stream of the softener"))
+            .map(ResponseEntity::ok);
+    }
+
+    @DeleteMapping("softener/live")
+    Mono<ResponseEntity<Void>> closeLive() {
+        return softenerLiveService.close()
+            .doOnSubscribe(subscription -> log.info("Closing the live stream of the softener"))
+            .then(Mono.fromSupplier(() -> ResponseEntity.noContent().<Void>build()));
     }
 
     //the alerts the iQua cloud keeps (HAS-399), newest first
