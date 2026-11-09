@@ -39,7 +39,10 @@ public enum WaterError implements ErrorId {
 
     //a start of the circulation refused: the tank is below water.circulation.tank-min - the pump would push cold water
     //round (HAS-404)
-    TANK_COLD("Hot water tank too cold");
+    TANK_COLD("Hot water tank too cold"),
+
+    //the softener has not been read from the iQua cloud since the start (HAS-397)
+    SOFTENER_UNAVAILABLE("Water softener unavailable");
 
     private final String description;
 }
