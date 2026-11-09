@@ -207,7 +207,7 @@ class IquaClientTest {
 
     //a wrong password: three logins, then none for 30 min - the cloud would block the account
     @Test
-    void should_hold_the_logins_after_three_failed_ones() throws InterruptedException {
+    void should_hold_the_logins_after_three_failed_ones() {
         server.enqueue(status(401));
         server.enqueue(status(401));
         server.enqueue(status(401));

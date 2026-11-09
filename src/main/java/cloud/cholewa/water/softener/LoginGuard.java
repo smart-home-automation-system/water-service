@@ -17,7 +17,7 @@ final class LoginGuard {
     static final Duration HOLD = Duration.ofMinutes(30);
 
     private final Clock clock;
-    private final Deque<Instant> failures = new ArrayDeque<>();
+    private final Deque<Instant> failedAt = new ArrayDeque<>();
 
     LoginGuard(final Clock clock) {
         this.clock = clock;
@@ -27,7 +27,7 @@ final class LoginGuard {
     synchronized Optional<Instant> heldUntil() {
         final Instant now = clock.instant();
         forgetOlderThan(now);
-        return Optional.of(failures)
+        return Optional.of(failedAt)
             .filter(recent -> recent.size() >= FAILURES)
             .map(recent -> recent.peekLast().plus(HOLD))
             .filter(until -> until.isAfter(now));
@@ -36,24 +36,24 @@ final class LoginGuard {
     synchronized void failed() {
         final Instant now = clock.instant();
         forgetOlderThan(now);
-        failures.addLast(now);
+        failedAt.addLast(now);
     }
 
     synchronized void succeeded() {
-        failures.clear();
+        failedAt.clear();
     }
 
     //a failure older than the window counts no more - unless it is one of a held run, whose hold is counted from the
     //last failure: kept until the hold after the last one is over
     private void forgetOlderThan(final Instant now) {
-        final boolean holding = failures.size() >= FAILURES && failures.peekLast().plus(HOLD).isAfter(now);
+        final boolean holding = failedAt.size() >= FAILURES && failedAt.peekLast().plus(HOLD).isAfter(now);
         if (!holding) {
-            while (!failures.isEmpty() && !failures.peekFirst().isAfter(now.minus(WINDOW))) {
-                failures.removeFirst();
+            while (!failedAt.isEmpty() && !failedAt.peekFirst().isAfter(now.minus(WINDOW))) {
+                failedAt.removeFirst();
             }
         }
-        if (failures.size() >= FAILURES && !failures.peekLast().plus(HOLD).isAfter(now)) {
-            failures.clear();
+        if (failedAt.size() >= FAILURES && !failedAt.peekLast().plus(HOLD).isAfter(now)) {
+            failedAt.clear();
         }
     }
 }
