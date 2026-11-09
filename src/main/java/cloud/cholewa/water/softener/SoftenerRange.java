@@ -11,7 +11,7 @@ import java.time.format.DateTimeParseException;
 //The ranges the history, the days and the regenerations of the softener are asked for (HAS-398). The rules of the
 //temperature history of HistoryRange - the years and the order of the bounds - with two differences: at most a year, so
 //that the salt and the treated water can be drawn over months, and a bucket of a day beyond a month, 366 points at most.
-//A range that breaks a rule is INVALID_RANGE with its reason; the parameters are read as text, so a missing or a wrong
+//A range that breaks a rule is INVALID_RANGE with its reason, and as the parameters are read as text, a missing or a wrong
 //one has the code too. Pinned by SoftenerRangeTest
 public final class SoftenerRange {
 
